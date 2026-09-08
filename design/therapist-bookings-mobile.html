@@ -22,6 +22,25 @@
   .booking-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;}
   .link-btn{font-size:12px;font-weight:500;padding:7px 12px;border-radius:9px;cursor:pointer;}
 
+
+
+  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap');
+  :root{
+    --surface:#FCFDFB; --surface-2:#E7ECE1; --border:#D3DBCB;
+    --ink:#212821; --ink-soft:#5B6459; --ink-faint:#8A9284;
+    --accent:#2E5D5A; --accent-strong:#1E4643; --accent-soft:#DCEAE6;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:"Noto Sans JP",sans-serif;color:var(--ink);}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;}
+  .row + .row{border-top:1px solid var(--border);}
+  .switch{width:38px;height:22px;border-radius:11px;position:relative;flex-shrink:0;}
+  .switch.on{background:var(--accent);}
+  .switch.off{background:var(--surface-2);border:1px solid var(--border);}
+  .knob{position:absolute;top:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);}
+  .switch.on .knob{left:18px;}
+  .switch.off .knob{left:2px;background:#fff;}
+
 </style>
 </head>
 <body>
@@ -74,7 +93,32 @@
     </div>
 
     <!-- Notification settings (shared component) -->
-    <dc-import name="NotificationCard" role="therapist" hint-size="100%,150px"></dc-import>
+    
+<div style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px;">
+    <h3 style="font-size:14px;color:var(--ink);">予約 / キャンセル通知（施術者向け）</h3>
+  </div>
+
+  <div class="row">
+    <div>
+      <div style="font-size:13px;color:var(--ink);">通知</div>
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">Slackに通知（#massage-room）</div>
+    </div>
+    <div class="switch on"><div class="knob"></div></div>
+  </div>
+
+  <div class="row">
+    <div>
+      <div style="font-size:13px;color:var(--ink);">通知タイミング</div>
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">予約時刻の何分前に届けるか</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;">
+      <span class="mono" style="font-size:13px;color:var(--accent-strong);font-weight:700;">10</span>
+      <span style="font-size:12px;color:var(--ink-faint);">分前</span>
+    </div>
+  </div>
+</div>
+
 
   </div>
 </div>
