@@ -27,6 +27,7 @@
   .chip.picked{border-color:var(--accent);background:var(--accent);color:#fff;font-weight:500;}
   .viewtab{padding:6px 14px;border-radius:8px;font-size:12px;color:var(--ink-faint);}
   .viewtab.active{background:var(--surface-2);color:var(--ink);font-weight:500;}
+  .pill-auto{font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:var(--amber-soft);color:var(--amber);}
 
 </style>
 </head>
@@ -68,7 +69,7 @@
     <div style="display:flex;align-items:baseline;justify-content:space-between;">
       <div>
         <h1 style="font-size:19px;">予約する</h1>
-        <p style="margin:2px 0 0;font-size:12px;color:var(--ink-faint);">第1マッサージ室</p>
+        <p style="margin:2px 0 0;font-size:12px;color:var(--ink-faint);">第1マッサージ室（施術者に応じて自動的に決まります）</p>
       </div>
       <div style="display:flex;align-items:center;gap:14px;font-size:11px;color:var(--ink-faint);">
         <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:3px;background:var(--surface-2);border:1px solid var(--border);display:inline-block;"></span>予約済み</span>
@@ -77,23 +78,14 @@
       </div>
     </div>
 
-    <!-- Filter bar -->
+    <!-- Therapist mode: おまかせ(自動選択)を基本とし、必要な場合のみ指定に切り替える -->
     <div class="panel" style="padding:14px 18px;display:flex;align-items:center;gap:20px;">
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8A9284" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        <div style="width:150px;height:34px;border:1px solid var(--border);border-radius:9px;background:var(--bg);display:flex;align-items:center;padding:0 10px;font-size:12px;color:var(--ink-soft);">佐藤</div>
-      </div>
-      <div style="width:1px;height:22px;background:var(--border);"></div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:12px;color:var(--ink-faint);flex-shrink:0;">性別で絞り込み</span>
-        <div style="display:flex;gap:6px;">
-          <div class="chip">指定なし</div>
-          <div class="chip">男性</div>
-          <div class="chip picked">女性</div>
-        </div>
+      <div style="display:flex;background:var(--bg);border-radius:9px;padding:3px;">
+        <div class="viewtab active">おまかせ（自動選択）</div>
+        <div class="viewtab">施術者を指定する</div>
       </div>
       <div style="flex-grow:1;"></div>
-      <span style="font-size:11px;color:var(--role-user);font-weight:500;">1名が条件に一致</span>
+      <span style="font-size:11px;color:var(--ink-faint);">負荷分散を考慮して自動的に割り当てます</span>
     </div>
 
     <div style="flex-grow:1;display:flex;gap:18px;overflow:hidden;">
@@ -434,14 +426,14 @@
 
         <div class="panel">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-            <span style="font-size:12px;color:var(--ink-faint);">施術者（絞り込み結果）</span>
+            <span style="font-size:12px;color:var(--ink-faint);">施術者</span>
+            <span class="pill-auto">自動選択（負荷分散を考慮）</span>
           </div>
-          <div style="display:flex;flex-direction:column;gap:8px;">
-            <div class="therapist-row picked">
-              <div style="width:30px;height:30px;border-radius:50%;background:#F0EBF4;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;color:#725286;font-size:13px;">香</div>
-              <div style="flex-grow:1;"><div style="font-size:13px;font-weight:500;">佐藤 香</div><div style="font-size:10px;color:var(--ink-faint);">女性 ・ むくみ・冷え</div></div>
-            </div>
+          <div class="therapist-row picked">
+            <div style="width:30px;height:30px;border-radius:50%;background:#DCE7EF;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;color:var(--accent-strong);font-size:13px;">仁</div>
+            <div style="flex-grow:1;"><div style="font-size:13px;font-weight:500;">田中 仁</div><div style="font-size:10px;color:var(--ink-faint);">肩こり・腰痛</div></div>
           </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--ink-faint);text-align:right;">施術者を指定したい方は<span style="color:var(--accent-strong);text-decoration:underline;">こちら</span></div>
         </div>
 
         <div class="panel">

@@ -22,8 +22,7 @@
   .daychip{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:44px;padding:8px 0;border-radius:12px;flex-shrink:0;}
   .slot{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-radius:12px;border:1px solid var(--border);}
   .pill{font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;}
-  .therapist-card{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:76px;padding:10px 6px;border-radius:12px;border:1.5px solid var(--border);flex-shrink:0;}
-  .therapist-card.picked{border-color:var(--accent);background:var(--accent-soft);}
+  .therapist-auto-card{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;border:1.5px solid var(--accent);background:var(--accent-soft);}
   .duration-chip{padding:7px 16px;border-radius:20px;font-size:13px;border:1.5px solid var(--border);color:var(--ink-soft);}
   .duration-chip.picked{border-color:var(--accent);background:var(--accent);color:#fff;font-weight:500;}
 
@@ -38,7 +37,7 @@
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#212821" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
     <div>
       <h1 style="font-size:17px;">予約する</h1>
-      <p style="margin:2px 0 0;font-size:12px;color:var(--ink-faint);">第1マッサージ室</p>
+      <p style="margin:2px 0 0;font-size:12px;color:var(--ink-faint);">第1マッサージ室（施術者に応じて自動的に決まります）</p>
     </div>
   </div>
 
@@ -93,23 +92,14 @@
         <span style="font-size:12px;color:var(--ink-faint);">施術者</span>
         <span class="pill" style="background:var(--amber-soft);color:var(--amber);">自動選択（負荷分散を考慮）</span>
       </div>
-      <div style="display:flex;gap:10px;overflow-x:auto;">
-        <div class="therapist-card picked">
-          <div style="width:36px;height:36px;border-radius:50%;background:#DCE7EF;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;color:var(--accent-strong);font-size:14px;">仁</div>
-          <span style="font-size:12px;font-weight:500;">田中 仁</span>
-          <span style="font-size:10px;color:var(--ink-faint);">肩こり・腰痛</span>
-        </div>
-        <div class="therapist-card">
-          <div style="width:36px;height:36px;border-radius:50%;background:#F0EBF4;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;color:#725286;font-size:14px;">香</div>
-          <span style="font-size:12px;font-weight:500;">佐藤 香</span>
-          <span style="font-size:10px;color:var(--ink-faint);">むくみ・冷え</span>
-        </div>
-        <div class="therapist-card">
-          <div style="width:36px;height:36px;border-radius:50%;background:#F0EBF4;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;color:#725286;font-size:14px;">健</div>
-          <span style="font-size:12px;font-weight:500;">木村 健</span>
-          <span style="font-size:10px;color:var(--ink-faint);">スポーツ系</span>
+      <div class="therapist-auto-card">
+        <div style="width:40px;height:40px;border-radius:50%;background:#DCE7EF;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;color:var(--accent-strong);font-size:15px;flex-shrink:0;">仁</div>
+        <div style="flex-grow:1;">
+          <div style="font-size:13px;font-weight:500;">田中 仁</div>
+          <div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">肩こり・腰痛</div>
         </div>
       </div>
+      <div style="margin-top:6px;font-size:11px;color:var(--ink-faint);text-align:right;">施術者を指定したい方は<span style="color:var(--accent-strong);text-decoration:underline;">こちら</span></div>
     </div>
 
     <!-- Duration -->
