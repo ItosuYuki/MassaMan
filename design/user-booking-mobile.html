@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>利用者 予約画面（スマホ版）</title>
+<style>
+
+  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap');
+  :root{
+    --bg:#F2F5EF; --surface:#FCFDFB; --surface-2:#E7ECE1; --border:#D3DBCB;
+    --ink:#212821; --ink-soft:#5B6459; --ink-faint:#8A9284;
+    --accent:#2E5D5A; --accent-strong:#1E4643; --accent-soft:#DCEAE6;
+    --amber:#9C6A1E; --amber-soft:#F2E4C8;
+    --role-user:#4E7A5B; --role-user-soft:#DEEBE1;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",sans-serif;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3{font-family:"Shippori Mincho",serif;margin:0;}
+  .mono{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;}
+  ::selection{background:var(--accent-soft);}
+  .daychip{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:44px;padding:8px 0;border-radius:12px;flex-shrink:0;}
+  .slot{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;border-radius:12px;border:1px solid var(--border);}
+  .pill{font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;}
+  .therapist-card{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:76px;padding:10px 6px;border-radius:12px;border:1.5px solid var(--border);flex-shrink:0;}
+  .therapist-card.picked{border-color:var(--accent);background:var(--accent-soft);}
+  .duration-chip{padding:7px 16px;border-radius:20px;font-size:13px;border:1.5px solid var(--border);color:var(--ink-soft);}
+  .duration-chip.picked{border-color:var(--accent);background:var(--accent);color:#fff;font-weight:500;}
+
+</style>
+</head>
+<body>
+
+<div style="position:relative;width:390px;height:844px;background:var(--bg);display:flex;flex-direction:column;overflow:hidden;">
+
+  <!-- App bar -->
+  <div style="padding:18px 20px 14px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:center;gap:12px;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#212821" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    <div>
+      <h1 style="font-size:17px;">予約する</h1>
+      <p style="margin:2px 0 0;font-size:12px;color:var(--ink-faint);">第1マッサージ室</p>
+    </div>
+  </div>
+
+  <div style="flex-grow:1;overflow-y:auto;padding:18px 20px 100px;display:flex;flex-direction:column;gap:22px;">
+
+    <!-- Calendar strip -->
+    <div>
+      <div style="font-size:12px;color:var(--ink-faint);margin-bottom:8px;">日付を選択</div>
+      <div style="display:flex;gap:8px;overflow-x:auto;">
+        <div class="daychip" style="background:var(--surface-2);"><span style="font-size:11px;color:var(--ink-faint);">火</span><span class="mono" style="font-size:14px;">8</span></div>
+        <div class="daychip" style="background:var(--accent);"><span style="font-size:11px;color:#DCEAE6;">水</span><span class="mono" style="font-size:14px;color:#fff;font-weight:700;">9</span></div>
+        <div class="daychip" style="background:var(--surface-2);"><span style="font-size:11px;color:var(--ink-faint);">木</span><span class="mono" style="font-size:14px;">10</span></div>
+        <div class="daychip" style="background:var(--surface-2);"><span style="font-size:11px;color:var(--ink-faint);">金</span><span class="mono" style="font-size:14px;">11</span></div>
+        <div class="daychip" style="background:var(--surface-2);"><span style="font-size:11px;color:var(--ink-faint);">土</span><span class="mono" style="font-size:14px;color:var(--ink-faint);">12</span></div>
+      </div>
+    </div>
+
+    <!-- Time slots -->
+    <div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:12px;color:var(--ink-faint);">空き状況（他の人の予約者名は表示されません）</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+
+        <div class="slot" style="background:var(--surface-2);border-color:var(--surface-2);">
+          <span class="mono" style="font-size:14px;color:var(--ink-faint);">9:00</span>
+          <span class="pill" style="background:#fff;color:var(--ink-faint);">予約済み</span>
+        </div>
+        <div class="slot" style="background:var(--surface-2);border-color:var(--surface-2);">
+          <span class="mono" style="font-size:14px;color:var(--ink-faint);">10:00</span>
+          <span class="pill" style="background:#fff;color:var(--ink-faint);">予約済み</span>
+        </div>
+        <div class="slot" style="background:var(--surface);">
+          <span class="mono" style="font-size:14px;">12:00</span>
+          <span class="pill" style="background:var(--role-user-soft);color:var(--role-user);">空き</span>
+        </div>
+        <div class="slot" style="background:var(--surface);">
+          <span class="mono" style="font-size:14px;">18:00</span>
+          <span class="pill" style="background:var(--role-user-soft);color:var(--role-user);">空き</span>
+        </div>
+        <div class="slot" style="background:var(--accent-soft);border-color:var(--accent);">
+          <span class="mono" style="font-size:14px;color:var(--accent-strong);font-weight:700;">19:00</span>
+          <span class="pill" style="background:var(--accent);color:#fff;">選択中</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Therapist -->
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:12px;color:var(--ink-faint);">施術者</span>
+        <span class="pill" style="background:var(--amber-soft);color:var(--amber);">自動選択（負荷分散を考慮）</span>
+      </div>
+      <div style="display:flex;gap:10px;overflow-x:auto;">
+        <div class="therapist-card picked">
+          <div style="width:36px;height:36px;border-radius:50%;background:#DCE7EF;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;color:var(--accent-strong);font-size:14px;">仁</div>
+          <span style="font-size:12px;font-weight:500;">田中 仁</span>
+          <span style="font-size:10px;color:var(--ink-faint);">肩こり・腰痛</span>
+        </div>
+        <div class="therapist-card">
+          <div style="width:36px;height:36px;border-radius:50%;background:#F0EBF4;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;color:#725286;font-size:14px;">香</div>
+          <span style="font-size:12px;font-weight:500;">佐藤 香</span>
+          <span style="font-size:10px;color:var(--ink-faint);">むくみ・冷え</span>
+        </div>
+        <div class="therapist-card">
+          <div style="width:36px;height:36px;border-radius:50%;background:#F0EBF4;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;color:#725286;font-size:14px;">健</div>
+          <span style="font-size:12px;font-weight:500;">木村 健</span>
+          <span style="font-size:10px;color:var(--ink-faint);">スポーツ系</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Duration -->
+    <div>
+      <div style="font-size:12px;color:var(--ink-faint);margin-bottom:8px;">施術時間（枠は1時間・片付け時間を含みます）</div>
+      <div style="display:flex;gap:8px;">
+        <div class="duration-chip">30分</div>
+        <div class="duration-chip picked">45分</div>
+      </div>
+    </div>
+
+    <!-- Comment -->
+    <div>
+      <div style="font-size:12px;color:var(--ink-faint);margin-bottom:8px;">施術してほしい部位・伝えたいこと（任意）</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:13px;color:var(--ink-soft);line-height:1.7;">
+        肩と首の張りが強いです。デスクワーク中心なので重点的にお願いしたいです。
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Sticky CTA -->
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:16px 20px 24px;background:linear-gradient(180deg, rgba(242,245,239,0) 0%, var(--bg) 40%);">
+    <button style="width:100%;height:52px;border:none;border-radius:14px;background:var(--accent);color:#fff;font-size:15px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+      この内容で予約する ・ <span class="mono">9/9 19:00〜</span>
+    </button>
+  </div>
+</div>
+
+</body>
+</html>

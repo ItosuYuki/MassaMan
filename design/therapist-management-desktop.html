@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>マッサージ師管理画面（PC版）</title>
+<style>
+
+  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap');
+  :root{
+    --bg:#F2F5EF; --surface:#FCFDFB; --surface-2:#E7ECE1; --border:#D3DBCB;
+    --ink:#212821; --ink-soft:#5B6459; --ink-faint:#8A9284;
+    --accent:#2E5D5A; --accent-strong:#1E4643; --accent-soft:#DCEAE6;
+    --role-admin:#725286; --role-admin-soft:#E7DFEC;
+    --star:#C9922E;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",sans-serif;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3{font-family:"Shippori Mincho",serif;margin:0;}
+  .mono{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;}
+  .navitem{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:13px;color:var(--ink-soft);}
+  .navitem.active{background:var(--role-admin-soft);color:var(--role-admin);font-weight:500;}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 22px;}
+  .tbar-track{flex-grow:1;height:9px;border-radius:5px;background:var(--surface-2);position:relative;overflow:hidden;}
+  .tbar-fill{height:100%;border-radius:5px;background:var(--role-admin);}
+  .roster-row{display:grid;grid-template-columns:1.6fr 1.4fr 1fr .9fr .9fr .9fr;align-items:center;gap:10px;padding:13px 4px;}
+  .roster-row + .roster-row{border-top:1px solid var(--border);}
+  .roster-row.selected{background:var(--role-admin-soft);border-radius:10px;margin:0 -8px;padding:13px 12px;}
+  .roster-row.selected + .roster-row{border-top:none;}
+  .stars{color:var(--star);font-size:13px;letter-spacing:1px;}
+  .status-badge{font-size:10px;font-weight:500;padding:3px 9px;border-radius:20px;}
+  .status-badge.active{background:var(--accent-soft);color:var(--accent-strong);}
+  .status-badge.paused{background:var(--surface-2);color:var(--ink-faint);}
+  .link-btn{font-size:11px;font-weight:500;padding:5px 11px;border-radius:8px;cursor:pointer;display:inline-block;background:var(--role-admin);color:#fff;}
+  .review-row{display:flex;flex-direction:column;gap:4px;padding:12px 2px;}
+  .review-row + .review-row{border-top:1px solid var(--border);}
+
+</style>
+</head>
+<body>
+
+<div style="width:1280px;height:800px;background:var(--bg);display:flex;overflow:hidden;">
+
+  <!-- Sidebar -->
+  <div style="width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:24px 0;">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 20px 20px;border-bottom:1px solid var(--border);margin-bottom:16px;">
+      <div style="width:30px;height:30px;border-radius:9px;background:var(--role-admin-soft);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#725286" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-3 2-5 4-5h8c2 0 4 2 4 5"/></svg>
+      </div>
+      <span style="font-family:'Shippori Mincho',serif;font-size:14px;">ほぐし予約</span>
+    </div>
+    <nav style="display:flex;flex-direction:column;gap:2px;padding:0 12px;">
+      <div class="navitem">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg>
+        利用率ダッシュボード
+      </div>
+      <div class="navitem active">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-3 2-5 4-5h8c2 0 4 2 4 5"/></svg>
+        マッサージ師管理
+      </div>
+    </nav>
+    <div style="flex-grow:1;"></div>
+    <div style="padding:16px 20px 0;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+      <div style="width:28px;height:28px;border-radius:50%;background:var(--role-admin-soft);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--role-admin);font-weight:500;">管</div>
+      <div>
+        <div style="font-size:12px;">総務部 管理者</div>
+        <div style="font-size:10px;color:var(--ink-faint);">施設管理担当</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div style="flex-grow:1;padding:28px 32px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;">
+
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <h1 style="font-size:19px;">マッサージ師管理</h1>
+          <span style="font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:var(--role-admin-soft);color:var(--role-admin);">サンプルデータ</span>
+        </div>
+        <p style="margin:4px 0 0;font-size:12px;color:var(--ink-faint);">在籍4名 / 稼働状況・満足度・口コミをまとめて確認できます</p>
+      </div>
+      <span class="link-btn" style="padding:9px 16px;font-size:12px;">+ 新しいマッサージ師を登録</span>
+    </div>
+
+    <!-- Roster table -->
+    <div class="panel">
+      <div class="roster-row" style="padding-top:2px;padding-bottom:10px;border-top:none;">
+        <span style="font-size:11px;color:var(--ink-faint);">氏名</span>
+        <span style="font-size:11px;color:var(--ink-faint);">稼働率</span>
+        <span style="font-size:11px;color:var(--ink-faint);">満足度</span>
+        <span style="font-size:11px;color:var(--ink-faint);">口コミ件数</span>
+        <span style="font-size:11px;color:var(--ink-faint);">状態</span>
+        <span style="font-size:11px;color:var(--ink-faint);"></span>
+      </div>
+
+      <div class="roster-row selected">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:30px;height:30px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--role-admin);font-weight:500;flex-shrink:0;">仁</div>
+          <span style="font-size:13px;font-weight:500;">田中 仁</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="tbar-track"><div class="tbar-fill" style="width:78%;"></div></div>
+          <span class="mono" style="font-size:12px;width:30px;text-align:right;">78%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="stars">★★★★★</span>
+          <span class="mono" style="font-size:11px;color:var(--ink-faint);">4.6</span>
+        </div>
+        <span style="font-size:13px;">32件</span>
+        <span class="status-badge active">勤務中</span>
+        <span class="link-btn">口コミを見る</span>
+      </div>
+
+      <div class="roster-row">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:30px;height:30px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--ink-soft);font-weight:500;flex-shrink:0;">健</div>
+          <span style="font-size:13px;">木村 健</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="tbar-track"><div class="tbar-fill" style="width:65%;"></div></div>
+          <span class="mono" style="font-size:12px;width:30px;text-align:right;">65%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="stars">★★★★☆</span>
+          <span class="mono" style="font-size:11px;color:var(--ink-faint);">4.3</span>
+        </div>
+        <span style="font-size:13px;">24件</span>
+        <span class="status-badge active">勤務中</span>
+        <span class="link-btn" style="background:var(--surface-2);color:var(--ink-soft);">口コミを見る</span>
+      </div>
+
+      <div class="roster-row">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:30px;height:30px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--ink-soft);font-weight:500;flex-shrink:0;">大</div>
+          <span style="font-size:13px;">高橋 大輔</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="tbar-track"><div class="tbar-fill" style="width:61%;"></div></div>
+          <span class="mono" style="font-size:12px;width:30px;text-align:right;">61%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="stars">★★★★☆</span>
+          <span class="mono" style="font-size:11px;color:var(--ink-faint);">4.1</span>
+        </div>
+        <span style="font-size:13px;">19件</span>
+        <span class="status-badge active">勤務中</span>
+        <span class="link-btn" style="background:var(--surface-2);color:var(--ink-soft);">口コミを見る</span>
+      </div>
+
+      <div class="roster-row">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:30px;height:30px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--ink-soft);font-weight:500;flex-shrink:0;">香</div>
+          <span style="font-size:13px;">佐藤 香</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="tbar-track"><div class="tbar-fill" style="width:44%;"></div></div>
+          <span class="mono" style="font-size:12px;width:30px;text-align:right;">44%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="stars">★★★★★</span>
+          <span class="mono" style="font-size:11px;color:var(--ink-faint);">4.8</span>
+        </div>
+        <span style="font-size:13px;">15件</span>
+        <span class="status-badge paused">午前のみ</span>
+        <span class="link-btn" style="background:var(--surface-2);color:var(--ink-soft);">口コミを見る</span>
+      </div>
+    </div>
+
+    <!-- Reviews panel for selected therapist -->
+    <div class="panel" style="flex-grow:1;overflow-y:auto;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;">
+        <h3 style="font-size:14px;">田中 仁 さんへの口コミ（32件）</h3>
+        <span style="font-size:11px;color:var(--ink-faint);">投稿者は所属部署のみ表示（匿名性を保持）</span>
+      </div>
+      <div style="display:flex;flex-direction:column;">
+        <div class="review-row">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="stars" style="font-size:12px;">★★★★★</span>
+            <span style="font-size:12px;color:var(--ink-soft);">開発部</span>
+            <span class="mono" style="font-size:11px;color:var(--ink-faint);">8/26</span>
+          </div>
+          <span style="font-size:12px;color:var(--ink);">肩と首の張りが楽になりました。的確に凝りをほぐしてくれます。</span>
+        </div>
+        <div class="review-row">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="stars" style="font-size:12px;">★★★★☆</span>
+            <span style="font-size:12px;color:var(--ink-soft);">総務部</span>
+            <span class="mono" style="font-size:11px;color:var(--ink-faint);">8/19</span>
+          </div>
+          <span style="font-size:12px;color:var(--ink);">丁寧な施術で安心できました。時間通りに終わるのも良い。</span>
+        </div>
+        <div class="review-row">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="stars" style="font-size:12px;">★★★★★</span>
+            <span style="font-size:12px;color:var(--ink-soft);">営業部</span>
+            <span class="mono" style="font-size:11px;color:var(--ink-faint);">8/5</span>
+          </div>
+          <span style="font-size:12px;color:var(--ink);">腰の重さが改善。次回もぜひお願いしたいです。</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

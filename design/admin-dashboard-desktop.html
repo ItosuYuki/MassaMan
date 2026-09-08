@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理者 利用率ダッシュボード（PC版・全体ビュー）</title>
+<style>
+
+  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap');
+  :root{
+    --bg:#F2F5EF; --surface:#FCFDFB; --surface-2:#E7ECE1; --border:#D3DBCB;
+    --ink:#212821; --ink-soft:#5B6459; --ink-faint:#8A9284;
+    --accent:#2E5D5A; --accent-strong:#1E4643; --accent-soft:#DCEAE6;
+    --role-admin:#725286; --role-admin-soft:#E7DFEC;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",sans-serif;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3{font-family:"Shippori Mincho",serif;margin:0;}
+  .mono{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;}
+  ::selection{background:var(--accent-soft);}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px 24px;}
+  .stat-tile{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;gap:8px;}
+  .bar{width:26px;border-radius:4px 4px 0 0;background:var(--accent);position:relative;}
+  .bar.vac{background:var(--accent);opacity:.4;}
+  .tbar-track{flex-grow:1;height:10px;border-radius:5px;background:var(--surface-2);position:relative;overflow:hidden;}
+  .tbar-fill{height:100%;border-radius:5px;background:var(--role-admin);}
+  .abar-track{flex-grow:1;height:10px;border-radius:5px;background:var(--surface-2);position:relative;overflow:hidden;}
+  .abar-fill{height:100%;border-radius:5px;background:var(--accent);}
+  .periodtab{padding:6px 14px;border-radius:8px;font-size:12px;color:var(--ink-faint);}
+  .periodtab.active{background:var(--surface);color:var(--ink);font-weight:500;box-shadow:0 1px 2px rgba(30,40,30,.08);}
+  .switch{width:36px;height:21px;border-radius:11px;position:relative;flex-shrink:0;}
+  .switch.on{background:var(--accent);}
+  .knob{position:absolute;top:2px;left:17px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);}
+  .dropchip{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9px;border:1px solid var(--border);background:var(--surface);font-size:12px;color:var(--ink-soft);}
+  .scopetab{padding:8px 18px;border-radius:9px;font-size:13px;color:var(--ink-faint);}
+  .scopetab.active{background:var(--role-admin);color:#fff;font-weight:500;}
+  .attrtab{padding:5px 12px;border-radius:20px;font-size:11px;color:var(--ink-faint);}
+  .attrtab.active{background:var(--accent-soft);color:var(--accent-strong);font-weight:500;}
+  .navitem{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:13px;color:var(--ink-soft);}
+  .navitem.active{background:var(--role-admin-soft);color:var(--role-admin);font-weight:500;}
+
+</style>
+</head>
+<body>
+
+<div style="width:1280px;height:800px;background:var(--bg);display:flex;overflow:hidden;">
+
+  <!-- Sidebar -->
+  <div style="width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:24px 0;">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 20px 20px;border-bottom:1px solid var(--border);margin-bottom:16px;">
+      <div style="width:30px;height:30px;border-radius:9px;background:var(--role-admin-soft);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#725286" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-3 2-5 4-5h8c2 0 4 2 4 5"/></svg>
+      </div>
+      <span style="font-family:'Shippori Mincho',serif;font-size:14px;">ほぐし予約</span>
+    </div>
+    <nav style="display:flex;flex-direction:column;gap:2px;padding:0 12px;">
+      <div class="navitem active">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg>
+        利用率ダッシュボード
+      </div>
+      <div class="navitem">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-3 2-5 4-5h8c2 0 4 2 4 5"/></svg>
+        マッサージ師管理
+      </div>
+    </nav>
+    <div style="flex-grow:1;"></div>
+    <div style="padding:16px 20px 0;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+      <div style="width:28px;height:28px;border-radius:50%;background:var(--role-admin-soft);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--role-admin);font-weight:500;">管</div>
+      <div>
+        <div style="font-size:12px;">総務部 管理者</div>
+        <div style="font-size:10px;color:var(--ink-faint);">施設管理担当</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main column -->
+  <div style="flex-grow:1;display:flex;flex-direction:column;overflow:hidden;">
+
+  <!-- Top bar -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 32px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;">
+    <div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <h1 style="font-size:20px;">マッサージ室 利用率ダッシュボード</h1>
+        <span style="font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:var(--role-admin-soft);color:var(--role-admin);">サンプルデータ</span>
+      </div>
+      <p style="margin:4px 0 0;font-size:12px;color:var(--ink-faint);">全4名のマッサージ師（男性3・女性1）/ 第1〜第2マッサージ室</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="display:flex;background:var(--bg);border-radius:9px;padding:3px;">
+        <div class="periodtab">日</div>
+        <div class="periodtab active">週</div>
+        <div class="periodtab">月</div>
+        <div class="periodtab">年</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:9px 14px;font-size:13px;color:var(--ink-soft);">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5B6459" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        <span class="mono">2026年 W37（9/7〜9/13）</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5B6459" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex-grow:1;padding:20px 32px 28px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;">
+
+    <!-- Filter row -->
+    <div class="panel" style="padding:12px 18px;display:flex;align-items:center;gap:18px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="switch on"><div class="knob"></div></div>
+        <span style="font-size:12px;color:var(--ink);">前週と比較</span>
+      </div>
+      <div style="width:1px;height:20px;background:var(--border);"></div>
+      <span style="font-size:11px;color:var(--ink-faint);flex-shrink:0;">属性で絞り込み</span>
+      <div class="dropchip">年代：全て<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#5B6459" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div>
+      <div class="dropchip">性別：全て<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#5B6459" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div>
+      <div class="dropchip">部署：全て<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#5B6459" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div>
+      <div style="flex-grow:1;"></div>
+      <div style="display:flex;background:var(--bg);border-radius:11px;padding:3px;">
+        <div class="scopetab active">全体</div>
+        <div class="scopetab">施術者個人</div>
+      </div>
+    </div>
+
+    <!-- Stat tiles -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;">
+      <div class="stat-tile">
+        <span style="font-size:12px;color:var(--ink-faint);">全体稼働率</span>
+        <span class="mono" style="font-size:26px;font-weight:700;color:var(--accent-strong);">72<span style="font-size:15px;">%</span></span>
+        <span style="font-size:11px;color:var(--accent-strong);">+4pt vs 前週</span>
+      </div>
+      <div class="stat-tile">
+        <span style="font-size:12px;color:var(--ink-faint);">今週の利用回数</span>
+        <span class="mono" style="font-size:26px;font-weight:700;">46<span style="font-size:13px;color:var(--ink-faint);"> 回</span></span>
+        <span style="font-size:11px;color:var(--accent-strong);">+3回 vs 前週</span>
+      </div>
+      <div class="stat-tile">
+        <span style="font-size:12px;color:var(--ink-faint);">利用した社員数</span>
+        <span class="mono" style="font-size:26px;font-weight:700;">31<span style="font-size:13px;color:var(--ink-faint);"> 人</span></span>
+        <span style="font-size:11px;color:var(--ink-faint);">±0人 vs 前週</span>
+      </div>
+      <div class="stat-tile">
+        <span style="font-size:12px;color:var(--ink-faint);">平均施術時間</span>
+        <span class="mono" style="font-size:26px;font-weight:700;">39<span style="font-size:13px;color:var(--ink-faint);"> 分</span></span>
+        <span style="font-size:11px;color:#C4523A;">-3分 vs 前週</span>
+      </div>
+    </div>
+
+    <!-- Charts row 1 -->
+    <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:16px;">
+
+      <!-- Time of day utilization -->
+      <div class="panel" style="display:flex;flex-direction:column;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px;">
+          <h3 style="font-size:14px;">時間帯別 稼働率</h3>
+          <div style="display:flex;align-items:center;gap:12px;font-size:11px;color:var(--ink-faint);">
+            <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:3px;background:var(--accent);display:inline-block;"></span>今週</span>
+            <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:3px;background:var(--surface-2);border:1px solid var(--border);display:inline-block;"></span>前週</span>
+          </div>
+        </div>
+        <p style="margin:2px 0 16px;font-size:11px;color:var(--ink-faint);">昼休みと19時台に利用が集中しています</p>
+        <div style="height:220px;display:flex;align-items:flex-end;gap:8px;border-bottom:1px solid var(--border);padding-bottom:2px;position:relative;">
+          <div style="position:absolute;left:0;right:0;top:25%;border-top:1px dashed var(--border);"></div>
+          <div style="position:absolute;left:0;right:0;top:50%;border-top:1px dashed var(--border);"></div>
+          <div style="position:absolute;left:0;right:0;top:75%;border-top:1px dashed var(--border);"></div>
+
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;position:relative;">
+              
+              <div style="display:flex;align-items:flex-end;gap:3px;height:170px;">
+                <div class="bar" style="height:30%;background:var(--accent);"></div>
+                <div class="bar" style="height:26%;background:var(--surface-2);"></div>
+              </div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">9</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;position:relative;">
+              
+              <div style="display:flex;align-items:flex-end;gap:3px;height:170px;">
+                <div class="bar" style="height:45%;background:var(--accent);"></div>
+                <div class="bar" style="height:40%;background:var(--surface-2);"></div>
+              </div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">10</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;position:relative;">
+              
+              <div style="display:flex;align-items:flex-end;gap:3px;height:170px;">
+                <div class="bar" style="height:55%;background:var(--accent);"></div>
+                <div class="bar" style="height:48%;background:var(--surface-2);"></div>
+              </div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">11</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;position:relative;">
+              
+              <div style="display:flex;align-items:flex-end;gap:3px;height:170px;">
+                <div class="bar" style="height:70%;background:var(--accent);"></div>
+                <div class="bar" style="height:66%;background:var(--surface-2);"></div>
+              </div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">12</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;position:relative;">
+              
+              <div style="display:flex;align-items:flex-end;gap:3px;height:170px;">
+                <div class="bar" style="height:40%;background:var(--accent);"></div>
+                <div class="bar" style="height:36%;background:var(--surface-2);"></div>
+              </div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">13</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;position:relative;">
+              
+              <div style="display:flex;align-items:flex-end;gap:3px;height:170px;">
+                <div class="bar" style="height:50%;background:var(--accent);"></div>
+                <div class="bar" style="height:44%;background:var(--surface-2);"></div>
+              </div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">14</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;position:relative;">
+              
+              <div style="display:flex;align-items:flex-end;gap:3px;height:170px;">
+                <div class="bar" style="height:35%;background:var(--accent);"></div>
+                <div class="bar" style="height:33%;background:var(--surface-2);"></div>
+              </div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">15</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;position:relative;">
+              
+              <div style="display:flex;align-items:flex-end;gap:3px;height:170px;">
+                <div class="bar" style="height:30%;background:var(--accent);"></div>
+                <div class="bar" style="height:28%;background:var(--surface-2);"></div>
+              </div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">16</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;position:relative;">
+              
+              <div style="display:flex;align-items:flex-end;gap:3px;height:170px;">
+                <div class="bar" style="height:55%;background:var(--accent);"></div>
+                <div class="bar" style="height:50%;background:var(--surface-2);"></div>
+              </div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">17</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;position:relative;">
+              
+              <div style="display:flex;align-items:flex-end;gap:3px;height:170px;">
+                <div class="bar" style="height:80%;background:var(--accent);"></div>
+                <div class="bar" style="height:72%;background:var(--surface-2);"></div>
+              </div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">18</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;position:relative;">
+              
+                <span class="mono" style="position:absolute;top:-18px;font-size:10px;font-weight:700;color:var(--accent-strong);">92%</span>
+              
+              <div style="display:flex;align-items:flex-end;gap:3px;height:170px;">
+                <div class="bar" style="height:92%;background:var(--accent-strong);"></div>
+                <div class="bar" style="height:84%;background:var(--surface-2);"></div>
+              </div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">19</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;position:relative;">
+              
+              <div style="display:flex;align-items:flex-end;gap:3px;height:170px;">
+                <div class="bar" style="height:60%;background:var(--accent);"></div>
+                <div class="bar" style="height:54%;background:var(--surface-2);"></div>
+              </div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">20</span>
+            </div>
+          
+        </div>
+      </div>
+
+      <!-- Therapist utilization -->
+      <div class="panel" style="display:flex;flex-direction:column;">
+        <h3 style="font-size:14px;margin-bottom:2px;">施術者別 稼働率</h3>
+        <p style="margin:0 0 18px;font-size:11px;color:var(--ink-faint);">偏りの是正状況を確認できます</p>
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:13px;width:76px;flex-shrink:0;">田中 仁</span>
+            <div class="tbar-track"><div class="tbar-fill" style="width:78%;"></div></div>
+            <span class="mono" style="font-size:12px;width:32px;text-align:right;">78%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:13px;width:76px;flex-shrink:0;">木村 健</span>
+            <div class="tbar-track"><div class="tbar-fill" style="width:65%;"></div></div>
+            <span class="mono" style="font-size:12px;width:32px;text-align:right;">65%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:13px;width:76px;flex-shrink:0;">高橋 大輔</span>
+            <div class="tbar-track"><div class="tbar-fill" style="width:61%;"></div></div>
+            <span class="mono" style="font-size:12px;width:32px;text-align:right;">61%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:13px;width:76px;flex-shrink:0;">佐藤 香</span>
+            <div class="tbar-track"><div class="tbar-fill" style="width:44%;"></div></div>
+            <span class="mono" style="font-size:12px;width:32px;text-align:right;">44%</span>
+          </div>
+        </div>
+        <p style="margin:16px 0 0;font-size:11px;color:var(--ink-faint);line-height:1.6;">佐藤は午前のみ勤務のため稼働率が低め。</p>
+      </div>
+    </div>
+
+    <!-- Charts row 2 -->
+    <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:16px;">
+
+      <!-- Vacancy chart -->
+      <div class="panel" style="display:flex;flex-direction:column;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px;">
+          <h3 style="font-size:14px;">時間帯別 空き時間</h3>
+          <span style="font-size:11px;color:var(--ink-faint);">単位：分／時間枠</span>
+        </div>
+        <p style="margin:2px 0 16px;font-size:11px;color:var(--ink-faint);">稼働率と同じ軸で、空いている時間を確認できます</p>
+        <div style="height:150px;display:flex;align-items:flex-end;gap:8px;border-bottom:1px solid var(--border);padding-bottom:2px;">
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;">
+              <div class="bar vac" style="height:70%;"></div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">9</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;">
+              <div class="bar vac" style="height:55%;"></div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">10</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;">
+              <div class="bar vac" style="height:45%;"></div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">11</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;">
+              <div class="bar vac" style="height:30%;"></div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">12</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;">
+              <div class="bar vac" style="height:60%;"></div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">13</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;">
+              <div class="bar vac" style="height:50%;"></div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">14</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;">
+              <div class="bar vac" style="height:65%;"></div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">15</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;">
+              <div class="bar vac" style="height:70%;"></div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">16</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;">
+              <div class="bar vac" style="height:45%;"></div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">17</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;">
+              <div class="bar vac" style="height:20%;"></div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">18</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;">
+              <div class="bar vac" style="height:8%;"></div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">19</span>
+            </div>
+          
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-grow:1;">
+              <div class="bar vac" style="height:40%;"></div>
+              <span class="mono" style="font-size:10px;color:var(--ink-faint);">20</span>
+            </div>
+          
+        </div>
+      </div>
+
+      <!-- Attribute comparison -->
+      <div class="panel" style="display:flex;flex-direction:column;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <h3 style="font-size:14px;">属性別 利用率</h3>
+          <div style="display:flex;background:var(--bg);border-radius:8px;padding:3px;">
+            <div class="attrtab">年代</div>
+            <div class="attrtab">性別</div>
+            <div class="attrtab active">部署</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:12px;width:64px;flex-shrink:0;">開発部</span>
+            <div class="abar-track"><div class="abar-fill" style="width:81%;"></div></div>
+            <span class="mono" style="font-size:12px;width:30px;text-align:right;">81%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:12px;width:64px;flex-shrink:0;">営業部</span>
+            <div class="abar-track"><div class="abar-fill" style="width:69%;"></div></div>
+            <span class="mono" style="font-size:12px;width:30px;text-align:right;">69%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:12px;width:64px;flex-shrink:0;">総務部</span>
+            <div class="abar-track"><div class="abar-fill" style="width:52%;"></div></div>
+            <span class="mono" style="font-size:12px;width:30px;text-align:right;">52%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:12px;width:64px;flex-shrink:0;">その他</span>
+            <div class="abar-track"><div class="abar-fill" style="width:38%;"></div></div>
+            <span class="mono" style="font-size:12px;width:30px;text-align:right;">38%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+
+</body>
+</html>

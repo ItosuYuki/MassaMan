@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>利用者 予約内容確認画面（スマホ版）</title>
+<style>
+
+  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap');
+  :root{
+    --bg:#F2F5EF; --surface:#FCFDFB; --surface-2:#E7ECE1; --border:#D3DBCB;
+    --ink:#212821; --ink-soft:#5B6459; --ink-faint:#8A9284;
+    --accent:#2E5D5A; --accent-strong:#1E4643; --accent-soft:#DCEAE6;
+    --role-user:#4E7A5B; --role-user-soft:#DEEBE1;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",sans-serif;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3{font-family:"Shippori Mincho",serif;margin:0;}
+  .mono{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;}
+  ::selection{background:var(--accent-soft);}
+  .kv{display:flex;justify-content:space-between;padding:9px 0;font-size:13px;}
+  .kv + .kv{border-top:1px solid var(--border);}
+  .history-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;}
+  .history-row + .history-row{border-top:1px solid var(--border);}
+
+</style>
+</head>
+<body>
+
+<div style="width:390px;height:844px;background:var(--bg);display:flex;flex-direction:column;overflow:hidden;">
+
+  <div style="padding:18px 20px 14px;border-bottom:1px solid var(--border);background:var(--surface);">
+    <h1 style="font-size:17px;">予約内容</h1>
+    <p style="margin:2px 0 0;font-size:12px;color:var(--ink-faint);">第1マッサージ室</p>
+  </div>
+
+  <div style="flex-grow:1;overflow-y:auto;padding:18px 20px 32px;display:flex;flex-direction:column;gap:20px;">
+
+    <!-- Reservation card -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px 20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <span class="mono" style="font-size:20px;font-weight:700;color:var(--ink);">9/9(水) 19:00</span>
+        <span style="font-size:11px;font-weight:500;padding:4px 10px;border-radius:20px;background:var(--role-user-soft);color:var(--role-user);">確定</span>
+      </div>
+      <div>
+        <div class="kv"><span style="color:var(--ink-faint);">施術者</span><span>田中 仁</span></div>
+        <div class="kv"><span style="color:var(--ink-faint);">施術時間</span><span>45分</span></div>
+        <div class="kv"><span style="color:var(--ink-faint);">お伝えした内容</span><span style="text-align:right;max-width:210px;color:var(--ink-soft);">肩と首の張りが強い。デスクワーク中心。</span></div>
+      </div>
+    </div>
+
+    <!-- Cancel -->
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      <button style="width:100%;height:48px;border-radius:12px;border:1.5px solid #C4523A;background:#fff;color:#C4523A;font-size:14px;font-weight:500;cursor:pointer;">この予約をキャンセルする</button>
+      <p style="margin:0;font-size:11px;color:var(--ink-faint);text-align:center;">予約の30分前まではキャンセル可能です</p>
+    </div>
+
+    <!-- Notification settings (shared component) -->
+    <dc-import name="NotificationCard" role="user" hint-size="100%,150px"></dc-import>
+
+    <!-- History -->
+    <div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;">
+        <h3 style="font-size:14px;">利用履歴</h3>
+        <span class="mono" style="font-size:12px;color:var(--accent-strong);font-weight:700;">利用12回目</span>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:4px 16px;">
+        <div class="history-row">
+          <div>
+            <div style="font-size:13px;">8/26(水) ・ 田中 仁</div>
+            <div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">肩・首 中心 / 45分</div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A9284" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+        <div class="history-row">
+          <div>
+            <div style="font-size:13px;">8/12(水) ・ 田中 仁</div>
+            <div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">腰 中心 / 30分</div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A9284" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+        <div class="history-row">
+          <div>
+            <div style="font-size:13px;">7/29(火) ・ 佐藤 香</div>
+            <div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">全身 / 45分</div>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A9284" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
