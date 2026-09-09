@@ -64,25 +64,30 @@
 
         <div class="slot" style="background:var(--surface-2);border-color:var(--surface-2);">
           <span class="mono" style="font-size:14px;color:var(--ink-faint);">9:00</span>
-          <span class="pill" style="background:#fff;color:var(--ink-faint);">予約済み</span>
+          <span class="pill" style="background:#fff;color:var(--ink-faint);">✕ 埋まってる</span>
         </div>
-        <div class="slot" style="background:var(--surface-2);border-color:var(--surface-2);">
-          <span class="mono" style="font-size:14px;color:var(--ink-faint);">10:00</span>
-          <span class="pill" style="background:#fff;color:var(--ink-faint);">予約済み</span>
+        <div class="slot" style="background:var(--role-user-soft);border-color:var(--role-user-soft);">
+          <span class="mono" style="font-size:14px;color:var(--role-user);">10:00</span>
+          <span class="pill" style="background:#fff;color:var(--role-user);">✓ 予約済み</span>
         </div>
         <div class="slot" style="background:var(--surface);">
           <span class="mono" style="font-size:14px;">12:00</span>
-          <span class="pill" style="background:var(--role-user-soft);color:var(--role-user);">空き</span>
+          <span class="pill" style="background:var(--role-user-soft);color:var(--role-user);">◯ 空き</span>
         </div>
         <div class="slot" style="background:var(--surface);">
           <span class="mono" style="font-size:14px;">18:00</span>
-          <span class="pill" style="background:var(--role-user-soft);color:var(--role-user);">空き</span>
+          <span class="pill" style="background:var(--role-user-soft);color:var(--role-user);">◯ 空き</span>
         </div>
         <div class="slot" style="background:var(--accent-soft);border-color:var(--accent);">
           <span class="mono" style="font-size:14px;color:var(--accent-strong);font-weight:700;">19:00</span>
-          <span class="pill" style="background:var(--accent);color:#fff;">選択中</span>
+          <span class="pill" style="background:var(--accent);color:#fff;">✓ 選択中</span>
         </div>
 
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;margin-top:10px;font-size:11px;color:var(--ink-faint);">
+        <span style="display:flex;align-items:center;gap:4px;"><b style="color:var(--role-user);">✓</b>予約済み</span>
+        <span style="display:flex;align-items:center;gap:4px;"><b>◯</b>空き</span>
+        <span style="display:flex;align-items:center;gap:4px;"><b>✕</b>埋まってる</span>
       </div>
     </div>
 
@@ -91,6 +96,11 @@
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <span style="font-size:12px;color:var(--ink-faint);">施術者</span>
         <span class="pill" style="background:var(--amber-soft);color:var(--amber);">自動選択（負荷分散を考慮）</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">
+        <span style="font-size:11px;color:var(--ink-faint);flex-shrink:0;">性別で絞り込み</span>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-soft);"><input type="checkbox" style="width:14px;height:14px;">男性</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-soft);"><input type="checkbox" style="width:14px;height:14px;">女性</label>
       </div>
       <div class="therapist-auto-card">
         <div style="width:40px;height:40px;border-radius:50%;background:#DDE7F0;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;color:var(--accent-strong);font-size:15px;flex-shrink:0;">仁</div>

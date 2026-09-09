@@ -25,8 +25,6 @@
   .therapist-row.picked{border-color:var(--accent);background:var(--accent-soft);}
   .chip{padding:7px 14px;border-radius:20px;font-size:12px;border:1.5px solid var(--border);color:var(--ink-soft);}
   .chip.picked{border-color:var(--accent);background:var(--accent);color:#fff;font-weight:500;}
-  .viewtab{padding:6px 14px;border-radius:8px;font-size:12px;color:var(--ink-faint);}
-  .viewtab.active{background:var(--surface-2);color:var(--ink);font-weight:500;}
   .pill-auto{font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;background:var(--amber-soft);color:var(--amber);}
 
 </style>
@@ -72,20 +70,10 @@
         <p style="margin:2px 0 0;font-size:12px;color:var(--ink-faint);">第1マッサージ室（施術者に応じて自動的に決まります）</p>
       </div>
       <div style="display:flex;align-items:center;gap:14px;font-size:11px;color:var(--ink-faint);">
-        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:3px;background:var(--surface-2);border:1px solid var(--border);display:inline-block;"></span>予約済み</span>
-        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:3px;background:var(--surface);border:1px solid var(--border);display:inline-block;"></span>空き</span>
-        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:3px;background:var(--accent);display:inline-block;"></span>選択中</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span class="mono" style="color:var(--role-user);font-weight:700;">✓</span>予約済み</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span class="mono" style="color:var(--ink-faint);font-weight:700;">◯</span>空き</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span class="mono" style="color:var(--ink-faint);font-weight:700;">✕</span>埋まってる</span>
       </div>
-    </div>
-
-    <!-- Therapist mode: おまかせ(自動選択)を基本とし、必要な場合のみ指定に切り替える -->
-    <div class="panel" style="padding:14px 18px;display:flex;align-items:center;gap:20px;">
-      <div style="display:flex;background:var(--bg);border-radius:9px;padding:3px;">
-        <div class="viewtab active">おまかせ（自動選択）</div>
-        <div class="viewtab">施術者を指定する</div>
-      </div>
-      <div style="flex-grow:1;"></div>
-      <span style="font-size:11px;color:var(--ink-faint);">負荷分散を考慮して自動的に割り当てます</span>
     </div>
 
     <div style="flex-grow:1;display:flex;gap:18px;overflow:hidden;">
@@ -94,9 +82,10 @@
       <div class="panel" style="flex-grow:1;display:flex;flex-direction:column;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
           <p style="margin:0;font-size:12px;color:var(--ink-faint);">空き状況（他の人の予約者名は表示されません）</p>
-          <div style="display:flex;background:var(--bg);border-radius:9px;padding:3px;">
-            <div class="viewtab active">週表示</div>
-            <div class="viewtab">月表示</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5B6459" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="cursor:pointer;"><path d="M15 18l-6-6 6-6"/></svg>
+            <span class="mono" style="font-size:12px;color:var(--ink-soft);">9/7（月）〜9/11（金）</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5B6459" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="cursor:pointer;"><path d="M9 18l6-6-6-6"/></svg>
           </div>
         </div>
         <div style="flex-grow:1;display:grid;grid-template-columns:56px repeat(5,1fr);grid-auto-rows:1fr;gap:4px;">
@@ -130,23 +119,23 @@
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:transparent;border-radius:7px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;">
@@ -154,23 +143,23 @@
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:transparent;border-radius:7px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;">
@@ -178,23 +167,23 @@
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:transparent;border-radius:7px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;">
@@ -202,23 +191,23 @@
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:transparent;border-radius:7px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;">
@@ -226,23 +215,23 @@
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:transparent;border-radius:7px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;">
@@ -250,23 +239,23 @@
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:transparent;border-radius:7px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;">
@@ -274,23 +263,23 @@
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:transparent;border-radius:7px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;">
@@ -298,47 +287,47 @@
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:transparent;border-radius:7px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;">
               <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">17:00</span>
             </div>
           
-            <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+            <div style="background:var(--role-user-soft);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
+              <span class="mono" style="font-size:11px;color:var(--role-user);font-weight:700;">✓</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:transparent;border-radius:7px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;">
@@ -346,23 +335,23 @@
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:var(--surface-2);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">✕</span>
             </div>
           
             <div style="background:transparent;border-radius:7px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;">
@@ -370,23 +359,23 @@
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:#fff;font-weight:700;">予約</span>
+              <span class="mono" style="font-size:11px;color:#fff;font-weight:700;">✓</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:transparent;border-radius:7px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;">
@@ -394,23 +383,23 @@
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
             <div style="background:var(--surface);border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 8px;">
-              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;"></span>
+              <span class="mono" style="font-size:11px;color:var(--ink-faint);font-weight:400;">◯</span>
             </div>
           
         </div>
@@ -429,11 +418,25 @@
             <span style="font-size:12px;color:var(--ink-faint);">施術者</span>
             <span class="pill-auto">自動選択（負荷分散を考慮）</span>
           </div>
-          <div class="therapist-row picked">
-            <div style="width:30px;height:30px;border-radius:50%;background:#DDE7F0;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;color:var(--accent-strong);font-size:13px;">仁</div>
-            <div style="flex-grow:1;"><div style="font-size:13px;font-weight:500;">田中 仁</div><div style="font-size:10px;color:var(--ink-faint);">肩こり・腰痛</div></div>
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;">
+            <span style="font-size:11px;color:var(--ink-faint);flex-shrink:0;">性別で絞り込み</span>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-soft);cursor:pointer;"><input type="checkbox" style="width:14px;height:14px;">男性</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-soft);cursor:pointer;"><input type="checkbox" style="width:14px;height:14px;">女性</label>
           </div>
-          <div style="margin-top:8px;font-size:11px;color:var(--ink-faint);text-align:right;">施術者を指定したい方は<span style="color:var(--accent-strong);text-decoration:underline;">こちら</span></div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div class="therapist-row picked">
+              <div style="width:30px;height:30px;border-radius:50%;background:#DDE7F0;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;color:var(--accent-strong);font-size:13px;">仁</div>
+              <div style="flex-grow:1;"><div style="font-size:13px;font-weight:500;">田中 仁</div><div style="font-size:10px;color:var(--ink-faint);">肩こり・腰痛</div></div>
+            </div>
+            <div class="therapist-row">
+              <div style="width:30px;height:30px;border-radius:50%;background:#F0EBF4;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;color:#725286;font-size:13px;">香</div>
+              <div style="flex-grow:1;"><div style="font-size:13px;font-weight:500;">佐藤 香</div><div style="font-size:10px;color:var(--ink-faint);">むくみ・冷え</div></div>
+            </div>
+            <div class="therapist-row">
+              <div style="width:30px;height:30px;border-radius:50%;background:#F0EBF4;display:flex;align-items:center;justify-content:center;font-family:'Shippori Mincho',serif;color:#725286;font-size:13px;">健</div>
+              <div style="flex-grow:1;"><div style="font-size:13px;font-weight:500;">木村 健</div><div style="font-size:10px;color:var(--ink-faint);">スポーツ系</div></div>
+            </div>
+          </div>
         </div>
 
         <div class="panel">
@@ -442,12 +445,15 @@
             <span class="mono" style="font-size:16px;font-weight:700;color:var(--accent-strong);">40<span style="font-size:11px;color:var(--ink-faint);font-weight:400;">分</span></span>
           </div>
           <div style="position:relative;height:6px;border-radius:3px;background:var(--surface-2);">
-            <div style="position:absolute;left:0;top:0;height:100%;width:89%;border-radius:3px;background:var(--accent);"></div>
-            <div style="position:absolute;left:89%;top:50%;width:16px;height:16px;margin-left:-8px;margin-top:-8px;border-radius:50%;background:#fff;border:2px solid var(--accent);"></div>
+            <div style="position:absolute;left:0;top:0;height:100%;width:87.5%;border-radius:3px;background:var(--accent);"></div>
+            <div style="position:absolute;left:0;right:0;top:50%;display:flex;justify-content:space-between;transform:translateY(-50%);">
+              <span style="width:3px;height:3px;border-radius:50%;background:#fff;"></span><span style="width:3px;height:3px;border-radius:50%;background:#fff;"></span><span style="width:3px;height:3px;border-radius:50%;background:#fff;"></span><span style="width:3px;height:3px;border-radius:50%;background:#fff;"></span><span style="width:3px;height:3px;border-radius:50%;background:#fff;"></span><span style="width:3px;height:3px;border-radius:50%;background:#fff;"></span><span style="width:3px;height:3px;border-radius:50%;background:var(--border);"></span><span style="width:3px;height:3px;border-radius:50%;background:var(--border);"></span>
+            </div>
+            <div style="position:absolute;left:87.5%;top:50%;width:16px;height:16px;margin-left:-8px;margin-top:-8px;border-radius:50%;background:#fff;border:2px solid var(--accent);"></div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:6px;">
-            <span style="font-size:10px;color:var(--ink-faint);">1分</span>
-            <span style="font-size:10px;color:var(--ink-faint);">45分</span>
+            <span style="font-size:10px;color:var(--ink-faint);">5分</span>
+            <span style="font-size:10px;color:var(--ink-faint);">45分（5分刻み）</span>
           </div>
         </div>
 
