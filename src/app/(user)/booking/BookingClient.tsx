@@ -107,13 +107,14 @@ export function BookingClient() {
             onNextWeek={() => setWeekAnchor((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7))}
           />
         </div>
-        <div className="sm:hidden">
+        <div className="flex flex-col gap-6 border-b border-border pb-6 sm:hidden">
           <TherapistPanel
             mode={mode}
             onChangeMode={setMode}
             hasEligibleTherapist={hasEligibleTherapist}
             slotSelected={selectedHour !== null}
           />
+          <DurationControl durationMinutes={durationMinutes} onChange={setDurationMinutes} />
         </div>
         <AvailabilityGrid
           days={days}
@@ -132,7 +133,9 @@ export function BookingClient() {
             slotSelected={selectedHour !== null}
           />
         </div>
-        <DurationControl durationMinutes={durationMinutes} onChange={setDurationMinutes} />
+        <div className="hidden sm:block">
+          <DurationControl durationMinutes={durationMinutes} onChange={setDurationMinutes} />
+        </div>
         <NoteField note={note} onChange={setNote} />
         <ConfirmBar
           label={confirmLabel}
