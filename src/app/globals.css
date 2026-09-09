@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap');
+@import "tailwindcss";
+
+/*
+ * Design tokens migrated from DESIGN.md §2 and §3.
+ * Tailwind v4 uses this CSS-first `@theme` block instead of tailwind.config.ts,
+ * so these values are also usable directly as utilities (e.g. bg-bg, text-ink-soft,
+ * bg-role-user-soft, font-heading, font-mono).
+ *
+ * Fonts are loaded via the @import above (same as every design/*.html mockup and
+ * DESIGN.md §3) rather than next/font/google, since each screen in this repo's
+ * design source is an independent document with no shared build step to hook into.
+ */
+@theme {
+  /* Base tokens (DESIGN.md §2.1) */
+  --color-bg: #EEF3F9;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #E2E9F2;
+  --color-border: #CBD7E3;
+  --color-ink: #1B2733;
+  --color-ink-soft: #4C5C6E;
+  --color-ink-faint: #7C8CA0;
+  --color-accent: #2B5C99;
+  --color-accent-strong: #1D4370;
+  --color-accent-soft: #DCE7F5;
+
+  /* Role tints (DESIGN.md §2.2) — same blue family, do not change hue */
+  --color-role-user: #2E74B8;
+  --color-role-user-soft: #DCEBF7;
+  --color-role-therapist: #2F5E86;
+  --color-role-therapist-soft: #DDE7F0;
+  --color-role-admin: #1B3A5C;
+  --color-role-admin-soft: #DCE1EA;
+
+  /* Fixed semantic colors (DESIGN.md §2.3) — never reskinned to brand blue */
+  --color-amber: #9C6A1E;
+  --color-amber-soft: #F2E4C8;
+  --color-star: #C9922E;
+  --color-destructive: #C4523A;
+
+  /* Typography (DESIGN.md §3) */
+  --font-heading: "Shippori Mincho", serif;
+  --font-sans: "Noto Sans JP", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+h1, h2, h3 {
+  font-family: var(--font-heading);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}

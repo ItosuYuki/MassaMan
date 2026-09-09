@@ -81,15 +81,20 @@ file.
 ## Design tokens
 
 Each mockup's `:root` block defines CSS custom properties (`--bg`,
-`--accent`, `--ink`, etc.) on a shared warm-neutral palette (colors
-vary slightly per role — user/therapist/admin each tint their own
-accent). These get moved into `tailwind.config.ts` under
-`theme.extend.colors`, so components reference them as Tailwind
-utilities (e.g. `bg-app`, `text-ink-soft`) instead of inline styles or
-hand-written CSS variables. The exact token list is populated when the
-first screen is implemented, not as part of this scaffold — this
-design only establishes that tokens live in the Tailwind theme, not
-scattered CSS files.
+`--accent`, `--ink`, etc.) on a shared palette (colors vary slightly
+per role — user/therapist/admin each tint their own accent). These get
+moved into the Tailwind theme, so components reference them as
+Tailwind utilities (e.g. `bg-bg`, `text-ink-soft`) instead of inline
+styles or hand-written CSS variables. This design only establishes
+that tokens live in the Tailwind theme, not scattered CSS files.
+
+> **Correction (post-scaffold):** the scaffolded stack uses Tailwind
+> CSS v4, which is CSS-first — there is no `tailwind.config.ts`.
+> Tokens instead live as CSS custom properties inside an `@theme`
+> block in `src/app/globals.css` (populated from DESIGN.md when the
+> login feature was implemented). The utility-class outcome is the
+> same as described above; only the config file location differs from
+> this spec's original assumption.
 
 ## Out of scope
 
