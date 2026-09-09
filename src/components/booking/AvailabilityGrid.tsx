@@ -73,7 +73,7 @@ export function AvailabilityGrid(props: {
         <div />
         {days.map((day) => (
           <div key={day.date} className="mono text-center text-[11px] text-ink-soft">
-            {day.date.slice(5)}
+            {day.date.slice(5).replace("-", "/")}
           </div>
         ))}
         {days[0]?.slots.map((_, hourIndex) => (

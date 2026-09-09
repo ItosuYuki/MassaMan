@@ -1,6 +1,6 @@
 "use client";
 
-const MOBILE_CHIPS = [30, 45];
+const MOBILE_CHIPS = [15, 30, 45];
 const MIN_DURATION = 5;
 const MAX_DURATION = 45;
 const STEP = 5;
