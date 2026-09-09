@@ -1,16 +1,16 @@
 import { requireRole } from "@/lib/dal";
-import { RoleHome } from "@/components/role-home";
+import { BookingClient } from "./BookingClient";
 
-export default async function BookingHomePage() {
-  const session = await requireRole("user");
+export default async function BookingPage() {
+  await requireRole("user");
 
   return (
-    <RoleHome
-      roleLabel="利用者"
-      roleTint="user"
-      name={session.name}
-      employeeId={session.employeeId}
-      note="予約画面（design/user-booking-*.html）はこのタスクの対象外です。別Issueで実装予定です。"
-    />
+    <main className="min-h-dvh bg-bg">
+      <header className="border-b border-border bg-surface px-5 py-4 sm:px-8">
+        <h1 className="text-lg">予約する</h1>
+        <p className="mt-0.5 text-xs text-ink-faint">マッサージ室は施術者に応じて自動的に決まります</p>
+      </header>
+      <BookingClient />
+    </main>
   );
 }
