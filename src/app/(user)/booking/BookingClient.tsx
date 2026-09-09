@@ -98,13 +98,15 @@ export function BookingClient() {
   return (
     <div className="flex flex-col gap-6 p-5 sm:flex-row sm:items-start sm:gap-0 sm:p-8">
       <div className="flex flex-col gap-6 sm:flex-1">
-        <DateStrip
-          weekDates={weekDates}
-          selectedDate={selectedDate}
-          onSelectDate={handleSelectDate}
-          onPrevWeek={() => setWeekAnchor((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7))}
-          onNextWeek={() => setWeekAnchor((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7))}
-        />
+        <div className="border-b border-border pb-6">
+          <DateStrip
+            weekDates={weekDates}
+            selectedDate={selectedDate}
+            onSelectDate={handleSelectDate}
+            onPrevWeek={() => setWeekAnchor((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7))}
+            onNextWeek={() => setWeekAnchor((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7))}
+          />
+        </div>
         <div className="sm:hidden">
           <TherapistPanel
             mode={mode}
