@@ -1,5 +1,5 @@
 export const BUSINESS_DAYS = [1, 2, 3, 4, 5] as const; // Mon-Fri (Date.getDay())
-export const BUSINESS_HOURS = { start: 9, end: 20 } as const;
+export const BUSINESS_HOURS = { start: 9, end: 19 } as const;
 
 export function getHourSlots(): number[] {
   const slots: number[] = [];
