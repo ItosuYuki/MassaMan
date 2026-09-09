@@ -96,7 +96,7 @@ export function BookingClient() {
   const confirmLabel = selectedHour !== null ? `${selectedDate.slice(5).replace("-", "/")} ${selectedHour}:00〜` : "";
 
   return (
-    <div className="flex flex-col gap-6 p-5 sm:flex-row sm:items-start sm:gap-8 sm:p-8">
+    <div className="flex flex-col gap-6 p-5 sm:flex-row sm:items-start sm:gap-0 sm:p-8">
       <div className="flex flex-col gap-6 sm:flex-1">
         <DateStrip
           weekDates={weekDates}
@@ -121,7 +121,7 @@ export function BookingClient() {
         />
       </div>
 
-      <div className="flex flex-col gap-6 sm:w-[340px] sm:flex-shrink-0">
+      <div className="flex flex-col gap-6 sm:w-[340px] sm:flex-shrink-0 sm:border-l sm:border-border sm:pl-8">
         <div className="hidden sm:block">
           <TherapistPanel
             mode={mode}
