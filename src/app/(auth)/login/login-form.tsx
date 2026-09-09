@@ -43,33 +43,24 @@ function Wordmark({ tone }: { tone: "ink" | "white" }) {
   );
 }
 
-function LogoBadge({
-  variant,
-  size,
-}: {
-  variant: "blue" | "white";
-  size: "lg" | "sm";
-}) {
-  const badgeStyle =
-    variant === "blue"
-      ? { background: "var(--color-accent-soft) url(/badge-background.jpg) center/cover no-repeat" }
-      : { background: "rgba(255,255,255,.15) url(/badge-background.jpg) center/cover no-repeat" };
+function LogoBadge({ size }: { size: "lg" | "sm" }) {
+  const px = size === "lg" ? 64 : 36;
 
   return (
     <div
       className={
         size === "lg"
-          ? "w-16 h-16 rounded-[20px] flex items-center justify-center shrink-0"
-          : "w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0"
+          ? "w-16 h-16 rounded-[20px] overflow-hidden shrink-0"
+          : "w-9 h-9 rounded-[10px] overflow-hidden shrink-0"
       }
-      style={badgeStyle}
     >
       <Image
-        src={variant === "blue" ? "/logo-mermaid-blue.png" : "/logo-mermaid-white.png"}
+        src="/icon.png"
         alt="マッサマン"
-        width={size === "lg" ? 44 : 24}
-        height={size === "lg" ? 23 : 13}
+        width={px}
+        height={px}
         priority
+        className="w-full h-full object-cover"
       />
     </div>
   );
@@ -86,7 +77,7 @@ export function LoginForm() {
       {/* Brand panel — desktop only */}
       <div className="hidden lg:flex lg:w-[520px] lg:shrink-0 bg-accent-strong text-white flex-col justify-between p-14 relative overflow-hidden">
         <div className="flex items-center gap-3 relative">
-          <LogoBadge variant="white" size="sm" />
+          <LogoBadge size="sm" />
           <Wordmark tone="white" />
         </div>
 
@@ -108,7 +99,7 @@ export function LoginForm() {
       <div className="flex-1 flex flex-col items-center justify-center gap-7 px-8 py-10">
         {/* Mobile-only logo/wordmark block */}
         <div className="flex flex-col items-center gap-3.5 lg:hidden">
-          <LogoBadge variant="blue" size="lg" />
+          <LogoBadge size="lg" />
           <div className="text-center">
             <Wordmark tone="ink" />
             <p className="mt-1.5 text-[13px] text-ink-faint">社内マッサージ室 予約システム</p>
