@@ -5,19 +5,19 @@ import type { AvailabilityDay } from "@/lib/booking/actions";
 const STATUS_SYMBOL: Record<string, string> = {
   reserved: "✓",
   available: "◯",
-  full: "✕",
+  unavailable: "✕",
 };
 
 const STATUS_LABEL: Record<string, string> = {
   reserved: "予約済み",
   available: "空き",
-  full: "埋まってる",
+  unavailable: "予約不可",
 };
 
 function slotClasses(status: string, isSelected: boolean) {
   if (isSelected) return "bg-accent-soft border border-accent text-accent-strong font-bold";
   if (status === "reserved") return "bg-role-user-soft text-role-user";
-  if (status === "full") return "bg-surface-2 text-ink-faint";
+  if (status === "unavailable") return "bg-surface-2 text-ink-faint";
   return "bg-surface text-ink";
 }
 
@@ -41,7 +41,7 @@ export function AvailabilityGrid(props: {
           <b>◯</b>空き
         </span>
         <span className="flex items-center gap-1">
-          <b>✕</b>埋まってる
+          <b>✕</b>予約不可
         </span>
       </div>
 
@@ -52,7 +52,7 @@ export function AvailabilityGrid(props: {
           return (
             <button
               key={slot.hour}
-              disabled={slot.status === "full"}
+              disabled={slot.status === "unavailable"}
               onClick={() => onSelectSlot(selectedDay.date, slot.hour)}
               className={`flex items-center justify-between rounded-xl px-3.5 py-3 ${slotClasses(
                 slot.status,
@@ -87,7 +87,7 @@ export function AvailabilityGrid(props: {
               return (
                 <button
                   key={`${day.date}-${slot.hour}`}
-                  disabled={slot.status === "full"}
+                  disabled={slot.status === "unavailable"}
                   onClick={() => onSelectSlot(day.date, slot.hour)}
                   className={`mono rounded-md py-1 text-[11px] ${slotClasses(
                     slot.status,

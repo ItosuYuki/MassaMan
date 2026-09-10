@@ -25,12 +25,15 @@ function genderFilterForMode(mode: TherapistMode): Gender[] {
 
 export function BookingClient() {
   const today = useMemo(() => new Date(), []);
+  const currentWeekMonday = useMemo(() => getWeekDates(today)[0], [today]);
   const [weekAnchor, setWeekAnchor] = useState(today);
   const weekDates = useMemo(() => getWeekDates(weekAnchor), [weekAnchor]);
+  const canGoPrevWeek = weekDates[0] > currentWeekMonday;
 
   const [selectedDate, setSelectedDate] = useState(formatIsoDate(today));
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const [days, setDays] = useState<AvailabilityDay[]>([]);
+  const [userHasReservationThisWeek, setUserHasReservationThisWeek] = useState(false);
 
   const [mode, setMode] = useState<TherapistMode>("auto");
   const [candidates, setCandidates] = useState<TherapistOption[]>([]);
@@ -42,7 +45,10 @@ export function BookingClient() {
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    getAvailability(formatIsoDate(weekDates[0])).then(setDays);
+    getAvailability(formatIsoDate(weekDates[0])).then((result) => {
+      setDays(result.days);
+      setUserHasReservationThisWeek(result.userHasReservationThisWeek);
+    });
   }, [weekDates]);
 
   useEffect(() => {
@@ -56,6 +62,7 @@ export function BookingClient() {
   const hasEligibleTherapist = candidates.some((c) => c.isAvailable);
 
   function handleSelectSlot(date: string, hour: number) {
+    if (isSlotInPast(date, hour, new Date())) return;
     setSelectedDate(date);
     setSelectedHour(hour);
     setError(null);
@@ -63,6 +70,10 @@ export function BookingClient() {
   }
 
   function handleSelectDate(iso: string) {
+    const picked = new Date(`${iso}T00:00:00`);
+    const todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+    if (picked < todayMidnight) return;
     setSelectedDate(iso);
     setError(null);
     setSuccess(false);
@@ -89,7 +100,10 @@ export function BookingClient() {
       setSelectedHour(null);
       setCandidates([]);
       setNote("");
-      getAvailability(formatIsoDate(weekDates[0])).then(setDays);
+      getAvailability(formatIsoDate(weekDates[0])).then((result) => {
+        setDays(result.days);
+        setUserHasReservationThisWeek(result.userHasReservationThisWeek);
+      });
     });
   }
 
@@ -105,6 +119,7 @@ export function BookingClient() {
             onSelectDate={handleSelectDate}
             onPrevWeek={() => setWeekAnchor((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7))}
             onNextWeek={() => setWeekAnchor((d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7))}
+            canGoPrevWeek={canGoPrevWeek}
           />
         </div>
         <div className="flex flex-col gap-6 border-b border-border pb-6 sm:hidden">
@@ -137,9 +152,12 @@ export function BookingClient() {
           <DurationControl durationMinutes={durationMinutes} onChange={setDurationMinutes} />
         </div>
         <NoteField note={note} onChange={setNote} />
+        {userHasReservationThisWeek && !success && (
+          <p className="text-xs text-destructive">1週間に1回までしか予約できません。今週はすでに予約があります。</p>
+        )}
         <ConfirmBar
           label={confirmLabel}
-          disabled={selectedHour === null || !assignedTherapistId}
+          disabled={selectedHour === null || !assignedTherapistId || userHasReservationThisWeek}
           pending={isPending}
           error={error}
           success={success}

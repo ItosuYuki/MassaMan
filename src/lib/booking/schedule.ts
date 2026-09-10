@@ -7,6 +7,13 @@ export function getHourSlots(): number[] {
   return slots;
 }
 
+/** Whether the given business-hour slot has already started (or passed), relative to `now`. */
+export function isSlotInPast(dateIso: string, startHour: number, now: Date): boolean {
+  const slotStart = new Date(`${dateIso}T00:00:00`);
+  slotStart.setHours(startHour, 0, 0, 0);
+  return slotStart <= now;
+}
+
 export function formatIsoDate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");

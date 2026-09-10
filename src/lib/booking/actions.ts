@@ -1,7 +1,14 @@
 "use server";
 
 import { requireRole } from "@/lib/dal";
-import { getWeekDates, getHourSlots, formatIsoDate, BUSINESS_DAYS, BUSINESS_HOURS } from "./schedule";
+import {
+  getWeekDates,
+  getHourSlots,
+  formatIsoDate,
+  isSlotInPast,
+  BUSINESS_DAYS,
+  BUSINESS_HOURS,
+} from "./schedule";
 import { computeSlotStatus, type SlotStatus } from "./availability";
 import { computeOccupancyRate } from "./occupancy";
 import { autoAssignTherapist, type TherapistCandidate } from "./auto-assign";
@@ -12,15 +19,23 @@ export type AvailabilityDay = {
   slots: { hour: number; status: SlotStatus }[];
 };
 
-export async function getAvailability(weekStartIso: string): Promise<AvailabilityDay[]> {
+export type AvailabilityResult = {
+  days: AvailabilityDay[];
+  /** Users may only hold one confirmed reservation per business week. */
+  userHasReservationThisWeek: boolean;
+};
+
+export async function getAvailability(weekStartIso: string): Promise<AvailabilityResult> {
   const session = await requireRole("user");
   const anchor = new Date(`${weekStartIso}T00:00:00`);
   const weekDates = getWeekDates(anchor);
+  const weekDateIsos = weekDates.map(formatIsoDate);
   const hourSlots = getHourSlots();
   const totalRooms = ROOMS.length;
   const { reservations } = getStore();
+  const now = new Date();
 
-  return weekDates.map((date) => {
+  const days = weekDates.map((date) => {
     const dateIso = formatIsoDate(date);
     const dayReservations = reservations.filter((r) => r.date === dateIso);
 
@@ -30,12 +45,19 @@ export async function getAvailability(weekStartIso: string): Promise<Availabilit
         totalRooms,
         bookedRoomCount: atHour.length,
         isOwnReservation: atHour.some((r) => r.userEmployeeId === session.employeeId),
+        isPast: isSlotInPast(dateIso, hour, now),
       });
       return { hour, status };
     });
 
     return { date: dateIso, slots };
   });
+
+  const userHasReservationThisWeek = reservations.some(
+    (r) => r.userEmployeeId === session.employeeId && weekDateIsos.includes(r.date)
+  );
+
+  return { days, userHasReservationThisWeek };
 }
 
 export type TherapistOption = {
@@ -103,6 +125,18 @@ export async function createReservation(input: {
 }): Promise<{ ok: true; reservationId: string } | { ok: false; error: string }> {
   const session = await requireRole("user");
   const store = getStore();
+
+  if (isSlotInPast(input.date, input.startHour, new Date())) {
+    return { ok: false, error: "過去の日時は予約できません。" };
+  }
+
+  const requestedWeekIsos = getWeekDates(new Date(`${input.date}T00:00:00`)).map(formatIsoDate);
+  const alreadyBookedThisWeek = store.reservations.some(
+    (r) => r.userEmployeeId === session.employeeId && requestedWeekIsos.includes(r.date)
+  );
+  if (alreadyBookedThisWeek) {
+    return { ok: false, error: "1週間に1回までしか予約できません。" };
+  }
 
   const therapist = THERAPISTS.find((t) => t.id === input.therapistId);
   if (!therapist) {

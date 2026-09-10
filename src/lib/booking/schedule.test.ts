@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BUSINESS_DAYS, BUSINESS_HOURS, getHourSlots, getWeekDates, formatIsoDate } from "./schedule";
+import { BUSINESS_DAYS, BUSINESS_HOURS, getHourSlots, getWeekDates, formatIsoDate, isSlotInPast } from "./schedule";
 
 describe("schedule", () => {
   it("BUSINESS_DAYS is Monday through Friday", () => {
@@ -40,5 +40,30 @@ describe("schedule", () => {
 
   it("formatIsoDate pads month and day to two digits", () => {
     expect(formatIsoDate(new Date("2026-01-05T00:00:00"))).toBe("2026-01-05");
+  });
+
+  describe("isSlotInPast", () => {
+    const now = new Date("2026-09-09T14:30:00");
+
+    it("is false for a slot later today", () => {
+      expect(isSlotInPast("2026-09-09", 15, now)).toBe(false);
+    });
+
+    it("is true for a slot earlier today, even mid-hour", () => {
+      expect(isSlotInPast("2026-09-09", 14, now)).toBe(true);
+    });
+
+    it("is true for the exact current hour (the slot has already started)", () => {
+      const onTheHour = new Date("2026-09-09T14:00:00");
+      expect(isSlotInPast("2026-09-09", 14, onTheHour)).toBe(true);
+    });
+
+    it("is true for any slot on a past date", () => {
+      expect(isSlotInPast("2026-09-08", 18, now)).toBe(true);
+    });
+
+    it("is false for any slot on a future date", () => {
+      expect(isSlotInPast("2026-09-10", 9, now)).toBe(false);
+    });
   });
 });
