@@ -3,10 +3,10 @@
 import { useState } from "react";
 
 const STEPS = [
-  "「予約を追加」から予約画面を開きます",
-  "予約したい日付と時間を選びます",
-  "施術者（自動／男性／女性）と施術時間を選びます",
-  "内容を確認して「はい」を押せば予約完了です",
+  { title: "① 予約を追加", body: "「予約を追加」から予約画面を開きます。" },
+  { title: "② 日時を選択", body: "希望する日付と時間を選びます。" },
+  { title: "③ 施術内容を選択", body: "施術者（自動・男性・女性）と施術時間を選びます。" },
+  { title: "④ 内容を確認して予約完了", body: "予約内容を確認し、「はい」を押すと予約完了です！" },
 ];
 
 export function FirstTimeGuide() {
@@ -17,20 +17,21 @@ export function FirstTimeGuide() {
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between text-sm text-ink"
+        className="flex w-full items-center justify-between text-sm font-medium text-ink"
       >
         <span>🔰 初めてのご利用の方へ</span>
         <span className="text-ink-faint">{open ? "▲" : "▼"}</span>
       </button>
       {open && (
-        <ol className="mt-3 flex flex-col gap-2 text-xs leading-relaxed text-ink-soft">
-          {STEPS.map((step, i) => (
-            <li key={step} className="flex gap-2">
-              <span className="mono flex-shrink-0 font-bold text-accent-strong">{i + 1}.</span>
-              <span>{step}</span>
-            </li>
+        <div className="mt-3 flex flex-col gap-3">
+          <p className="text-xs text-ink-soft">マッサージの予約はかんたん4ステップ！</p>
+          {STEPS.map((step) => (
+            <div key={step.title}>
+              <p className="text-xs font-bold text-accent-strong">{step.title}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-ink-soft">{step.body}</p>
+            </div>
           ))}
-        </ol>
+        </div>
       )}
     </div>
   );
