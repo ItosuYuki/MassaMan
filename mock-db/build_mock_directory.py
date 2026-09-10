@@ -18,6 +18,7 @@ Requires: bcrypt (pip install bcrypt)
 
 import sqlite3
 import uuid
+from datetime import date, timedelta
 from pathlib import Path
 
 import bcrypt
@@ -54,6 +55,54 @@ CREATE TABLE therapist_profiles (
   photo_url   TEXT,
   is_active   INTEGER NOT NULL DEFAULT 1
 );
+
+CREATE TABLE therapist_shifts (
+  id            TEXT PRIMARY KEY,
+  therapist_id  TEXT NOT NULL REFERENCES therapist_profiles(id),
+  work_date     TEXT NOT NULL,
+  start_time    TEXT NOT NULL,
+  end_time      TEXT NOT NULL,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (therapist_id, work_date)
+);
+
+CREATE TABLE therapist_breaks (
+  id           TEXT PRIMARY KEY,
+  shift_id     TEXT NOT NULL REFERENCES therapist_shifts(id),
+  break_start  TEXT NOT NULL,
+  break_end    TEXT NOT NULL
+);
+
+CREATE TABLE rooms (
+  id   TEXT PRIMARY KEY,
+  name TEXT NOT NULL
+);
+
+CREATE TABLE reservations (
+  id                TEXT PRIMARY KEY,
+  user_id           TEXT NOT NULL REFERENCES users(id),
+  therapist_id      TEXT NOT NULL REFERENCES therapist_profiles(id),
+  room_id           TEXT REFERENCES rooms(id),
+  reservation_date  TEXT NOT NULL,
+  start_time        TEXT NOT NULL,
+  end_time          TEXT NOT NULL,
+  requested_note    TEXT,
+  status            TEXT NOT NULL CHECK (status IN ('confirmed', 'cancelled', 'completed', 'no_show')) DEFAULT 'confirmed',
+  cancelled_at      TEXT,
+  cancel_reason     TEXT,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE notification_settings (
+  id              TEXT PRIMARY KEY,
+  user_id         TEXT NOT NULL REFERENCES users(id),
+  channel         TEXT NOT NULL CHECK (channel IN ('in_app', 'email', 'slack')),
+  enabled         INTEGER NOT NULL DEFAULT 1,
+  minutes_before  INTEGER NOT NULL,
+  slack_user_id   TEXT
+);
 """
 
 DEPARTMENTS = [
@@ -75,6 +124,27 @@ ACCOUNTS = [
     ("A3001", "鈴木 一郎", "admin", "male", "総務部"),
 ]
 
+ROOMS = ["第1マッサージ室", "第2マッサージ室"]
+
+# Sample reservations for T2002 (木村健), mirroring
+# design/therapist-bookings-desktop.html. day_offset is relative to the date the
+# script is run (0 = today, matching the app's "今日/明日" tabs).
+RESERVATIONS = [
+    # (therapist_employee_code, client_employee_code, day_offset, start_time, end_time, note)
+    ("T2002", "E1002", 0, "09:00", "09:30", None),
+    ("T2002", "E1001", 0, "12:00", "12:45", "肩と首の張りが強い。デスクワーク中心。"),
+    ("T2002", "E1003", 0, "19:00", "19:45", "腰が重い。長時間の立ち仕事が続いている。"),
+    ("T2002", "E1003", 1, "10:00", "10:30", None),
+    ("T2002", "E1002", 1, "15:00", "15:45", None),
+]
+
+# (employee_code, channel, minutes_before) — defaults per database-auth-design.md §6
+NOTIFICATION_DEFAULTS = {
+    "user": ("in_app", 30),
+    "therapist": ("slack", 10),
+    "admin": ("in_app", 30),
+}
+
 
 def build():
     if DB_PATH.exists():
@@ -91,8 +161,11 @@ def build():
 
     password_hash = bcrypt.hashpw(TEST_PASSWORD.encode(), bcrypt.gensalt()).decode()
 
+    user_ids = {}
+    therapist_profile_ids = {}
     for employee_code, name, role, gender, dept_name in ACCOUNTS:
         user_id = str(uuid.uuid4())
+        user_ids[employee_code] = user_id
         conn.execute(
             """
             INSERT INTO users (id, employee_code, name, department_id, role, gender, password_hash)
@@ -101,14 +174,51 @@ def build():
             (user_id, employee_code, name, dept_ids.get(dept_name), role, gender, password_hash),
         )
         if role == "therapist":
+            therapist_profile_id = str(uuid.uuid4())
+            therapist_profile_ids[employee_code] = therapist_profile_id
             conn.execute(
                 "INSERT INTO therapist_profiles (id, user_id) VALUES (?, ?)",
-                (str(uuid.uuid4()), user_id),
+                (therapist_profile_id, user_id),
             )
+
+        channel, minutes_before = NOTIFICATION_DEFAULTS[role]
+        conn.execute(
+            "INSERT INTO notification_settings (id, user_id, channel, minutes_before) VALUES (?, ?, ?, ?)",
+            (str(uuid.uuid4()), user_id, channel, minutes_before),
+        )
+
+    room_ids = []
+    for name in ROOMS:
+        room_id = str(uuid.uuid4())
+        room_ids.append(room_id)
+        conn.execute("INSERT INTO rooms (id, name) VALUES (?, ?)", (room_id, name))
+
+    for i, (therapist_code, client_code, day_offset, start_time, end_time, note) in enumerate(RESERVATIONS):
+        reservation_date = (date.today() + timedelta(days=day_offset)).isoformat()
+        conn.execute(
+            """
+            INSERT INTO reservations
+              (id, user_id, therapist_id, room_id, reservation_date, start_time, end_time, requested_note)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid.uuid4()),
+                user_ids[client_code],
+                therapist_profile_ids[therapist_code],
+                room_ids[i % len(room_ids)],
+                reservation_date,
+                start_time,
+                end_time,
+                note,
+            ),
+        )
 
     conn.commit()
     conn.close()
-    print(f"Built {DB_PATH} with {len(DEPARTMENTS)} departments and {len(ACCOUNTS)} accounts.")
+    print(
+        f"Built {DB_PATH} with {len(DEPARTMENTS)} departments, {len(ACCOUNTS)} accounts, "
+        f"{len(ROOMS)} rooms, and {len(RESERVATIONS)} reservations."
+    )
 
 
 def verify():
