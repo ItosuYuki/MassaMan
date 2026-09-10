@@ -53,8 +53,8 @@ export function DateStrip(props: {
         })}
       </div>
 
-      {/* Desktop: week nav */}
-      <div className="hidden items-center justify-between sm:flex">
+      {/* Week nav (both mobile and desktop) */}
+      <div className="mt-3 flex items-center justify-between sm:mt-0">
         <button
           onClick={onPrevWeek}
           disabled={!canGoPrevWeek}

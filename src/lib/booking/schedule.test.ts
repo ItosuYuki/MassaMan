@@ -3,6 +3,7 @@ import {
   BUSINESS_DAYS,
   BUSINESS_HOURS,
   SLOT_STEP_MINUTES,
+  CLOSING_TIME_MINUTES,
   getTimeSlots,
   formatTimeLabel,
   getWeekDates,
@@ -19,12 +20,16 @@ describe("schedule", () => {
     expect(BUSINESS_HOURS.end).toBe(19);
   });
 
-  it("getTimeSlots returns every 15 minutes from 9:00 through 19:00 inclusive", () => {
+  it("getTimeSlots returns every 15 minutes from 9:00 through 19:30 inclusive", () => {
     const slots = getTimeSlots();
     expect(slots[0]).toBe(9 * 60);
-    expect(slots[slots.length - 1]).toBe(19 * 60);
-    expect(slots.length).toBe((19 - 9) * 4 + 1);
+    expect(slots[slots.length - 1]).toBe(19 * 60 + 30);
+    expect(slots.length).toBe((19 - 9) * 4 + 3);
     expect(SLOT_STEP_MINUTES).toBe(15);
+  });
+
+  it("CLOSING_TIME_MINUTES is 19:45", () => {
+    expect(CLOSING_TIME_MINUTES).toBe(19 * 60 + 45);
   });
 
   it("formatTimeLabel formats minutes-from-midnight as H:MM", () => {

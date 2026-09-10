@@ -9,6 +9,7 @@ import {
   BUSINESS_DAYS,
   BUSINESS_HOURS,
   SLOT_STEP_MINUTES,
+  CLOSING_TIME_MINUTES,
 } from "./schedule";
 import { computeSlotStatus, type SlotStatus } from "./availability";
 import { computeOccupancyRate } from "./occupancy";
@@ -44,7 +45,10 @@ export type AvailabilityResult = {
   userHasReservationThisWeek: boolean;
 };
 
-export async function getAvailability(weekStartIso: string): Promise<AvailabilityResult> {
+export async function getAvailability(
+  weekStartIso: string,
+  durationMinutes: number
+): Promise<AvailabilityResult> {
   const session = await requireRole("user");
   const anchor = new Date(`${weekStartIso}T00:00:00`);
   const weekDates = getWeekDates(anchor);
@@ -66,6 +70,8 @@ export async function getAvailability(weekStartIso: string): Promise<Availabilit
         bookedRoomCount,
         isOwnReservation: coveringTick.some((r) => r.userEmployeeId === session.employeeId),
         isPast: isSlotInPast(dateIso, tick, now),
+        // Treatment itself (not the cleanup buffer after it) must finish by closing.
+        wouldExceedClosing: tick + durationMinutes > CLOSING_TIME_MINUTES,
       });
       return { startMinutes: tick, status };
     });
@@ -157,6 +163,10 @@ export async function createReservation(input: {
 
   if (isSlotInPast(input.date, input.startMinutes, new Date())) {
     return { ok: false, error: "過去の日時は予約できません。" };
+  }
+
+  if (input.startMinutes + input.durationMinutes > CLOSING_TIME_MINUTES) {
+    return { ok: false, error: "この時間帯は営業終了までに施術が終わらないため予約できません。" };
   }
 
   const requestedWeekIsos = getWeekDates(new Date(`${input.date}T00:00:00`)).map(formatIsoDate);

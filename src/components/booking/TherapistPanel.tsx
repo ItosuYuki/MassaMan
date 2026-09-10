@@ -37,7 +37,11 @@ export function TherapistPanel(props: {
       </div>
 
       {mode === "auto" && (
-        <p className="mt-2 text-[11px] text-amber">自動選択は施術者の稼働状況を考慮して負荷分散します</p>
+        <p className="mt-2 text-[11px] leading-relaxed text-amber">
+          空いている施術者の中から、システムが自動で選択します。
+          <br />
+          施術者の指定がない場合におすすめです。
+        </p>
       )}
 
       {slotSelected && !hasEligibleTherapist && (

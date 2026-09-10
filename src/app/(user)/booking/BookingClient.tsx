@@ -28,8 +28,11 @@ function genderFilterForMode(mode: TherapistMode): Gender[] {
   return [];
 }
 
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+
 function dateLabel(iso: string): string {
-  return iso.slice(5).replace("-", "/");
+  const weekday = WEEKDAY_LABELS[new Date(`${iso}T00:00:00`).getDay()];
+  return `${iso.slice(5).replace("-", "/")}（${weekday}）`;
 }
 
 export function BookingClient() {
@@ -60,11 +63,12 @@ export function BookingClient() {
     date: string;
     startMinutes: number;
   } | null>(null);
+  const [cancelStep, setCancelStep] = useState<"confirm" | "success">("confirm");
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [isCancelling, startCancelTransition] = useTransition();
 
   function refreshAvailability() {
-    getAvailability(formatIsoDate(weekDates[0])).then((result) => {
+    getAvailability(formatIsoDate(weekDates[0]), durationMinutes).then((result) => {
       setDays(result.days);
       setUserHasReservationThisWeek(result.userHasReservationThisWeek);
     });
@@ -73,7 +77,7 @@ export function BookingClient() {
   useEffect(() => {
     refreshAvailability();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekDates]);
+  }, [weekDates, durationMinutes]);
 
   useEffect(() => {
     if (selectedStartMinutes === null) {
@@ -96,6 +100,7 @@ export function BookingClient() {
       getOwnReservationAt(date, startMinutes).then((res) => {
         if (res) {
           setCancelError(null);
+          setCancelStep("confirm");
           setCancelTarget({ reservationId: res.id, date, startMinutes });
         }
       });
@@ -160,7 +165,7 @@ export function BookingClient() {
         setCancelError(result.error);
         return;
       }
-      setCancelTarget(null);
+      setCancelStep("success");
       refreshAvailability();
     });
   }
@@ -226,6 +231,8 @@ export function BookingClient() {
           step={confirmStep}
           dateLabel={dateLabel(selectedDate)}
           timeLabel={confirmTimeLabel}
+          durationMinutes={durationMinutes}
+          note={note}
           pending={isPending}
           error={confirmError}
           onConfirm={handleConfirmReservation}
@@ -235,6 +242,7 @@ export function BookingClient() {
 
       {cancelTarget && (
         <CancelDialog
+          step={cancelStep}
           dateLabel={dateLabel(cancelTarget.date)}
           timeLabel={`${formatTimeLabel(cancelTarget.startMinutes)}〜`}
           pending={isCancelling}

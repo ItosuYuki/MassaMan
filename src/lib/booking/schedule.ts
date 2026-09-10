@@ -2,10 +2,13 @@ export const BUSINESS_DAYS = [1, 2, 3, 4, 5] as const; // Mon-Fri (Date.getDay()
 export const BUSINESS_HOURS = { start: 9, end: 19 } as const;
 export const SLOT_STEP_MINUTES = 15;
 
-/** Minutes-from-midnight for every bookable start time, e.g. 540 (9:00) .. 1140 (19:00), step 15. */
+/** The business day closes at 19:45 — no treatment (including its cleanup buffer) may run past this. */
+export const CLOSING_TIME_MINUTES = 19 * 60 + 45;
+
+/** Minutes-from-midnight for every displayed start-time row, e.g. 540 (9:00) .. 1170 (19:30), step 15. */
 export function getTimeSlots(): number[] {
   const startMinutes = BUSINESS_HOURS.start * 60;
-  const endMinutes = BUSINESS_HOURS.end * 60;
+  const endMinutes = BUSINESS_HOURS.end * 60 + 30;
   const slots: number[] = [];
   for (let m = startMinutes; m <= endMinutes; m += SLOT_STEP_MINUTES) slots.push(m);
   return slots;
