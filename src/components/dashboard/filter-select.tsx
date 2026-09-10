@@ -21,7 +21,7 @@ export function FilterSelect({
         value={value}
         onChange={(e) => {
           const href = options.find((o) => o.value === e.target.value)?.href;
-          if (href) router.push(href);
+          if (href) router.push(href, { scroll: false });
         }}
         className="bg-transparent outline-none text-ink-soft"
       >

@@ -23,11 +23,20 @@ const LINE_COLORS = [
  * alongside 性別 — role-user (also blue-family) read too similar to accent for
  * a 2-line comparison, so 女性 is pinned to the destructive red instead of
  * cycling through LINE_COLORS by position. 全体 (the optional whole-population
- * reference line) is pinned to plain ink so it never collides with either. */
+ * reference line) is pinned to the default blue accent. */
 const VALUE_COLORS: Record<string, string> = {
-  全体: "var(--color-ink)",
+  全体: "var(--color-series-overall)",
   男性: "var(--color-accent)",
   女性: "var(--color-destructive)",
+  未回答: "var(--color-amber)",
+  "20代": "var(--color-accent)",
+  "30代": "var(--color-star)",
+  "40代": "var(--color-role-therapist)",
+  "50代以上": "var(--color-amber)",
+  開発部: "var(--color-accent)",
+  営業部: "var(--color-star)",
+  総務部: "var(--color-role-therapist)",
+  その他: "var(--color-amber)",
 };
 
 function colorForSeries(valueLabel: string, index: number): string {
@@ -83,7 +92,7 @@ function ClosedDayBoxes({ xs, closed }: { xs: number[]; closed: boolean[] }) {
           closed[i] && (
             <div
               key={i}
-              className="absolute top-0 bottom-0 border border-border bg-ink-faint/10 rounded"
+              className="absolute top-0 bottom-0 bg-ink-faint/10"
               style={{ left: `${x - slot / 2}%`, width: `${slot}%` }}
             />
           )
@@ -97,15 +106,22 @@ function LineChart({
   labels,
   closed,
 }: {
-  series: { values: number[]; color: string; dashed?: boolean }[];
+  series: { values: (number | null)[]; color: string; dashed?: boolean }[];
   labels: string[];
   closed: boolean[];
 }) {
-  const max = Math.max(100, ...series.flatMap((s) => s.values));
+  const max = Math.max(100, ...series.flatMap((s) => s.values.filter((v): v is number => v !== null)));
   const xs = xPositions(labels.length);
   const toY = (v: number) => 100 - (v / max) * 100;
-  const pathFor = (values: number[]) =>
-    values.map((v, i) => `${i === 0 ? "M" : "L"}${xs[i].toFixed(2)},${toY(v).toFixed(2)}`).join(" ");
+  const pathFor = (values: (number | null)[]) => {
+    let path = "";
+    values.forEach((v, i) => {
+      if (v === null) return;
+      const previous = i > 0 ? values[i - 1] : null;
+      path += `${previous === null ? "M" : "L"}${xs[i].toFixed(2)},${toY(v).toFixed(2)} `;
+    });
+    return path.trim();
+  };
 
   return (
     <div className="flex flex-col grow">
@@ -123,7 +139,7 @@ function LineChart({
           ))}
         </div>
 
-        <div className="relative grow h-[190px]">
+        <div className="relative grow h-[190px] overflow-hidden">
           {/* Gridlines at the exact same % positions as the Y-axis labels and the plotted points */}
           {Y_TICKS.map((t) => (
             <div
@@ -152,7 +168,7 @@ function LineChart({
           {/* Point markers as plain HTML circles (fixed px size) — an SVG <circle> inside a
               non-uniformly-stretched viewBox renders as an ellipse, not a circle. */}
           {series.map((s, si) =>
-            s.values.map((v, i) => (
+            s.values.map((v, i) => v !== null && (
               <div
                 key={`${si}-${i}`}
                 className="absolute w-[7px] h-[7px] rounded-full -translate-x-1/2 -translate-y-1/2"
@@ -172,22 +188,22 @@ function LineChart({
  * after the panel's description paragraph, before the chart) so the legend
  * never jumps position when the admin toggles the attribute checkboxes. */
 export function UtilizationTrendChart({ points, showPrevious }: { points: TrendPoint[]; showPrevious: boolean }) {
-  const series: { values: number[]; color: string; dashed?: boolean }[] = [
-    { values: points.map((p) => p.currentRate), color: "var(--color-accent)" },
+  const series: { values: (number | null)[]; color: string; dashed?: boolean }[] = [
+    { values: points.map((p) => p.currentRate), color: "var(--color-series-overall)" },
   ];
   if (showPrevious) {
-    series.push({ values: points.map((p) => p.previousRate), color: "var(--color-ink-faint)", dashed: true });
+    series.push({ values: points.map((p) => p.previousRate), color: "var(--color-series-overall)", dashed: true });
   }
   return (
     <div className="flex flex-col grow">
       <div className="flex items-center gap-3 mb-2 text-[11px] text-ink-faint">
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-0.5 rounded-sm bg-accent inline-block" />
+          <span className="w-2.5 h-0.5 rounded-sm inline-block" style={{ background: "var(--color-series-overall)" }} />
           今期間
         </span>
         {showPrevious && (
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-0.5 rounded-sm bg-ink-faint inline-block" />
+            <span className="w-2.5 h-0.5 rounded-sm inline-block" style={{ background: "var(--color-series-overall)" }} />
             前期間
           </span>
         )}
@@ -199,15 +215,19 @@ export function UtilizationTrendChart({ points, showPrevious }: { points: TrendP
 
 /** Multiple attribute-value lines overlaid for direct comparison (e.g. 男性 vs
  * 女性), each against its OWN group's headcount — see getUtilizationTrendByAttribute. */
-export function AttributeTrendChart({ series }: { series: AttributeTrendSeries[] }) {
+export function AttributeTrendChart({ series, showPrevious }: { series: AttributeTrendSeries[]; showPrevious: boolean }) {
   if (series.length === 0) return null;
   const labels = series[0].points.map((p) => p.label);
   const closed = series[0].points.map((p) => p.closed);
-  const lineSeries = series.map((s, i) => ({
-    values: s.points.map((p) => p.rate),
-    color: colorForSeries(s.valueLabel, i),
-    dashed: s.valueLabel === "全体",
-  }));
+  const lineSeries = series.flatMap((s, i) => {
+    const color = colorForSeries(s.valueLabel, i);
+    return [
+      { values: s.points.map((p) => p.rate), color },
+      ...(showPrevious && s.points.some((p) => p.previousRate !== null)
+        ? [{ values: s.points.map((p) => p.previousRate), color, dashed: true }]
+        : []),
+    ];
+  });
 
   return (
     <div className="flex flex-col grow">
@@ -225,19 +245,19 @@ export function AttributeTrendChart({ series }: { series: AttributeTrendSeries[]
 }
 
 export function VacancyChart({ points }: { points: VacancyPoint[] }) {
-  const max = Math.max(1, ...points.map((p) => p.vacantHours));
+  const max = Math.max(1, ...points.flatMap((p) => (p.vacantHours === null ? [] : [p.vacantHours])));
 
   return (
     <div className="flex flex-col grow px-[3%]">
-      <div className="h-[150px] flex items-end gap-2 border-b border-border">
+      <div className="h-[150px] flex items-end gap-2 border-b border-border overflow-hidden">
         {points.map((p, i) => (
           <div key={i} className="relative flex flex-col items-center justify-end gap-1.5 flex-1 min-w-0 h-full">
-            {p.closed && <div className="absolute inset-0 -mx-1 border border-border bg-ink-faint/10 rounded" />}
-            <span className="relative mono text-[10px] text-ink-faint whitespace-nowrap">{p.vacantHours}h</span>
-            <div
+            {p.closed && <div className="absolute inset-0 -mx-1 bg-ink-faint/10" />}
+            {p.vacantHours !== null && <span className="relative mono text-[10px] text-ink-faint whitespace-nowrap">{p.vacantHours}h</span>}
+            {p.vacantHours !== null && <div
               className={`relative w-full max-w-[26px] rounded-t ${p.closed ? "bg-ink-faint/25" : "bg-accent opacity-40"}`}
               style={{ height: `${(p.vacantHours / max) * 100}%` }}
-            />
+            />}
           </div>
         ))}
       </div>

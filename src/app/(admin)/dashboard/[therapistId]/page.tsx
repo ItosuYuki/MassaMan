@@ -82,7 +82,7 @@ export default async function TherapistDashboardPage({
             ? [overallAttributeSeries(await getUtilizationTrend(period, range, previousRange, filters, therapistId))]
             : []),
           ...(attributeKeys.length > 0
-            ? await getUtilizationTrendByAttribute(period, range, lineAttr, filters, therapistId, attributeKeys)
+            ? await getUtilizationTrendByAttribute(period, range, previousRange, lineAttr, filters, therapistId, attributeKeys)
             : []),
         ]
       : [];
@@ -164,7 +164,7 @@ export default async function TherapistDashboardPage({
           {trend ? (
             <UtilizationTrendChart points={trend} showPrevious={compare} />
           ) : (
-            <AttributeTrendChart series={trendByAttribute} />
+            <AttributeTrendChart series={trendByAttribute} showPrevious={compare} />
           )}
         </div>
 

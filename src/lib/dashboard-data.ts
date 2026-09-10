@@ -43,9 +43,10 @@ function hourOf(time: string): number {
 async function fetchShifts(range: DateRange, therapistId?: string): Promise<ShiftRow[]> {
   const therapistClause = therapistId ? sql`AND therapist_id = ${therapistId}` : sql``;
   return sql<ShiftRow[]>`
-    SELECT therapist_id, work_date, start_time, end_time
+    SELECT therapist_id, work_date, start_time, LEAST(end_time, TIME '20:00') AS end_time
     FROM therapist_shifts
     WHERE work_date BETWEEN ${range.start} AND ${range.end}
+      AND start_time < TIME '20:00'
       ${therapistClause}
   `;
 }
@@ -74,13 +75,15 @@ async function fetchReservations(
   const attrClause = attributeWhere(filters);
 
   return sql<ReservationRow[]>`
-    SELECT r.therapist_id, r.user_id, r.reservation_date, r.start_time, r.end_time,
+    SELECT r.therapist_id, r.user_id, r.reservation_date, r.start_time,
+           LEAST(r.end_time, TIME '20:00') AS end_time,
            u.age_bracket, u.gender, d.name as department_name
     FROM reservations r
     JOIN users u ON u.id = r.user_id
     LEFT JOIN departments d ON d.id = u.department_id
     WHERE r.reservation_date BETWEEN ${range.start} AND ${range.end}
       AND r.status IN ('confirmed', 'completed')
+      AND r.start_time < TIME '20:00'
       ${therapistClause}
       ${attrClause}
   `;
@@ -138,6 +141,10 @@ function rate(numerator: number, denominator: number): number {
   return denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
 }
 
+function rateOrNull(numerator: number, denominator: number): number | null {
+  return denominator > 0 ? Math.round((numerator / denominator) * 100) : null;
+}
+
 export type OverallStats = {
   utilizationRate: number;
   reservationCount: number;
@@ -169,7 +176,7 @@ export async function getOverallStats(range: DateRange, filters: AttributeFilter
   };
 }
 
-export type TrendPoint = { label: string; currentRate: number; previousRate: number; closed: boolean };
+export type TrendPoint = { label: string; currentRate: number | null; previousRate: number | null; closed: boolean };
 
 /** 利用率の推移: bucketed by trendBuckets(period, range) — hour-of-day for "day",
  * weekday for "week", week-of-month for "month", month for "year". Same
@@ -186,15 +193,15 @@ export async function getUtilizationTrend(
   const filtered = isFiltered(filters);
   const headcount = filtered ? await getHeadcount(filters) : 0;
 
-  async function seriesFor(outerRange: DateRange): Promise<number[]> {
+  async function seriesFor(outerRange: DateRange): Promise<(number | null)[]> {
     const buckets = trendBuckets(period, outerRange);
     return Promise.all(
       buckets.map(async (b) => {
         if (filtered) {
-          return rate(await countUsersInBucket(b, outerRange, filters, therapistId), headcount);
+          return rateOrNull(await countUsersInBucket(b, outerRange, filters, therapistId), headcount);
         }
         const { booked, available } = await countMinutesInBucket(b, outerRange, therapistId);
-        return rate(booked, available);
+        return rateOrNull(booked, available);
       })
     );
   }
@@ -205,15 +212,15 @@ export async function getUtilizationTrend(
 
   return currentBuckets.map((b, i) => ({
     label: b.label,
-    currentRate: current[i] ?? 0,
-    previousRate: previous[i] ?? 0,
+    currentRate: current[i] ?? null,
+    previousRate: previous[i] ?? null,
     closed: b.closed,
   }));
 }
 
 export type AttributeTrendSeries = {
   valueLabel: string;
-  points: { label: string; rate: number; closed: boolean }[];
+  points: { label: string; rate: number | null; previousRate: number | null; closed: boolean }[];
 };
 
 /** Sentinel value for the "全体" checkbox — not a real age/gender/department
@@ -228,7 +235,7 @@ export const OVERALL_ATTRIBUTE_VALUE = "__all__";
 export function overallAttributeSeries(points: TrendPoint[]): AttributeTrendSeries {
   return {
     valueLabel: "全体",
-    points: points.map((p) => ({ label: p.label, rate: p.currentRate, closed: p.closed })),
+    points: points.map((p) => ({ label: p.label, rate: p.currentRate, previousRate: p.previousRate, closed: p.closed })),
   };
 }
 
@@ -247,6 +254,7 @@ export function overallAttributeSeries(points: TrendPoint[]): AttributeTrendSeri
 export async function getUtilizationTrendByAttribute(
   period: PeriodType,
   range: DateRange,
+  previousRange: DateRange,
   attribute: AttributeKind,
   filters: AttributeFilter,
   therapistId?: string,
@@ -264,12 +272,26 @@ export async function getUtilizationTrendByAttribute(
   return Promise.all(
     keys.map(async (key) => {
       const extra = { attribute, value: key };
+      const previousBuckets = trendBuckets(period, previousRange);
       const points = await Promise.all(
-        buckets.map(async (b, i) => ({
-          label: b.label,
-          rate: rate(await countBookedMinutesInBucket(b, range, filters, therapistId, extra), available[i]),
-          closed: b.closed,
-        }))
+        buckets.map(async (b, i) => {
+          const previousBucket = previousBuckets[i];
+          return {
+            label: b.label,
+            rate: rateOrNull(await countBookedMinutesInBucket(b, range, filters, therapistId, extra), available[i]),
+            // The previous period can have fewer buckets than the current one (e.g. a
+            // 5-week month compared against a 4-week previous month) — there's simply
+            // no previous-period data for the extra point, not a rate of 0.
+            previousRate:
+              previousBucket === undefined
+                ? null
+                : rateOrNull(
+                    await countBookedMinutesInBucket(previousBucket, previousRange, filters, therapistId, extra),
+                    (await countMinutesInBucket(previousBucket, previousRange, therapistId)).available,
+                  ),
+            closed: b.closed,
+          };
+        })
       );
       return { valueLabel: attributeLabel(attribute, key), points };
     })
@@ -366,7 +388,7 @@ async function countMinutesInBucket(
   return { booked, available };
 }
 
-export type VacancyPoint = { label: string; vacantHours: number; closed: boolean };
+export type VacancyPoint = { label: string; vacantHours: number | null; closed: boolean };
 
 /** 空き時間 = (マッサージ師の出勤可能時間の合計 − マッサージに使われた時間の合計) ÷ 60,
  * bucketed with the SAME trendBuckets() as getUtilizationTrend so the two charts
@@ -383,7 +405,7 @@ export async function getVacancyTrend(
       const { booked, available } = await countMinutesInBucket(b, range, therapistId);
       return {
         label: b.label,
-        vacantHours: Math.round(Math.max(0, available - booked) / 6) / 10,
+        vacantHours: available > 0 ? Math.round(Math.max(0, available - booked) / 6) / 10 : null,
         closed: b.closed,
       };
     })

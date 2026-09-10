@@ -100,7 +100,7 @@ const THERAPIST_SPECIALTIES: Record<string, { specialty: string; bio: string }> 
 };
 
 const THERAPIST_SHIFTS: Record<string, { start: number; end: number; baseUtil: number; recentBoost: number }> = {
-  T2001: { start: 9, end: 21, baseUtil: 0.6, recentBoost: 0.32 }, // trending up
+  T2001: { start: 9, end: 20, baseUtil: 0.6, recentBoost: 0.32 }, // trending up
   T2002: { start: 9, end: 20, baseUtil: 0.6, recentBoost: 0.0 },
   T2003: { start: 9, end: 19, baseUtil: 0.56, recentBoost: 0.0 },
   T2004: { start: 9, end: 13, baseUtil: 0.5, recentBoost: 0.0 }, // mornings only
@@ -109,7 +109,7 @@ const THERAPIST_SHIFTS: Record<string, { start: number; end: number; baseUtil: n
 // Relative demand per hour-of-day (lunch + evening peaks).
 const HOUR_WEIGHT: Record<number, number> = {
   9: 0.35, 10: 0.45, 11: 0.55, 12: 0.7, 13: 0.4, 14: 0.5,
-  15: 0.35, 16: 0.3, 17: 0.55, 18: 0.8, 19: 0.92, 20: 0.6,
+  15: 0.35, 16: 0.3, 17: 0.55, 18: 0.8, 19: 0.92,
 };
 
 const WEEKS_OF_HISTORY = 52;
@@ -251,6 +251,7 @@ async function build() {
   const shiftRows: (typeof therapistShifts.$inferInsert)[] = [];
   const reservationRows: (typeof reservations.$inferInsert)[] = [];
   const roomBusy = new Map<string, Set<string>>(); // `${date}|${hour}` -> room ids in use
+  const userReservationWeeks = new Set<string>();
 
   for (const [code, cfg] of Object.entries(THERAPIST_SHIFTS)) {
     const therapistId = therapistProfileIdByCode.get(code)!;
@@ -292,6 +293,9 @@ async function build() {
         const endMinutes = h * 60 + duration;
         const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
 
+        const userId = rng.choices(allUserIds, userWeights);
+        const weekStart = addDays(d, -pyWeekday(d));
+        const userWeekKey = `${userId}|${toISODate(weekStart)}`;
         const busyKey = `${dateStr}|${h}`;
         const busy = roomBusy.get(busyKey) ?? new Set<string>();
         roomBusy.set(busyKey, busy);
@@ -304,8 +308,11 @@ async function build() {
         const roomId = rng.choice(availableRooms);
         busy.add(roomId);
 
-        const userId = rng.choices(allUserIds, userWeights);
         const status = rng.choices(["confirmed", "completed", "cancelled"] as const, [0.15, 0.8, 0.05]);
+        if (status !== "cancelled") {
+          if (userReservationWeeks.has(userWeekKey)) continue;
+          userReservationWeeks.add(userWeekKey);
+        }
 
         reservationRows.push({
           id: crypto.randomUUID(),

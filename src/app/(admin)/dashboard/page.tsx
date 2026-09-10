@@ -89,7 +89,7 @@ export default async function AdminDashboardPage({
             ? [overallAttributeSeries(await getUtilizationTrend(period, range, previousRange, filters))]
             : []),
           ...(attributeKeys.length > 0
-            ? await getUtilizationTrendByAttribute(period, range, lineAttr, filters, undefined, attributeKeys)
+            ? await getUtilizationTrendByAttribute(period, range, previousRange, lineAttr, filters, undefined, attributeKeys)
             : []),
         ]
       : [];
@@ -145,7 +145,7 @@ export default async function AdminDashboardPage({
     >
       <div className="grid grid-cols-4 gap-3.5">
         <StatTile label="全体利用率" value={stats.utilizationRate} unit="%" highlight delta={rateDelta?.text} deltaTone={rateDelta?.tone} />
-        <StatTile label={`${period === "day" ? "本日" : "今期間"}の利用回数`} value={stats.reservationCount} unit="回" delta={countDelta?.text} deltaTone={countDelta?.tone} />
+        <StatTile label="今期間の利用回数" value={stats.reservationCount} unit="回" delta={countDelta?.text} deltaTone={countDelta?.tone} />
         <StatTile label="利用した社員数" value={stats.distinctUsers} unit="人" delta={usersDelta?.text} deltaTone={usersDelta?.tone} />
         <StatTile label="平均施術時間" value={stats.avgDurationMinutes} unit="分" delta={durationDelta?.text} deltaTone={durationDelta?.tone} />
       </div>
@@ -157,7 +157,7 @@ export default async function AdminDashboardPage({
           {trend ? (
             <UtilizationTrendChart points={trend} showPrevious={compare} />
           ) : (
-            <AttributeTrendChart series={trendByAttribute} />
+            <AttributeTrendChart series={trendByAttribute} showPrevious={compare} />
           )}
         </div>
 

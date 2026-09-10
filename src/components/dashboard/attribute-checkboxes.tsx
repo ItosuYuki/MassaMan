@@ -18,7 +18,7 @@ export function AttributeCheckboxes({
           <input
             type="checkbox"
             checked={o.checked}
-            onChange={() => router.push(o.href)}
+            onChange={() => router.push(o.href, { scroll: false })}
             className="accent-accent w-3.5 h-3.5"
           />
           {o.label}

@@ -128,7 +128,7 @@ export type TrendBucket =
 
 const WEEKDAY_LABELS = ["月", "火", "水", "木", "金", "土", "日"];
 const MONTH_LABELS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
-export const HOURS = Array.from({ length: 12 }, (_, i) => i + 9); // 9..20
+export const HOURS = Array.from({ length: 11 }, (_, i) => i + 9); // 9..19
 
 /**
  * The x-axis buckets for a given period + range: hour-of-day for "day",
