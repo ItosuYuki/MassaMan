@@ -90,7 +90,8 @@ CREATE TABLE therapist_breaks (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   shift_id     uuid NOT NULL REFERENCES therapist_shifts(id),
   break_start  time NOT NULL,
-  break_end    time NOT NULL
+  break_end    time NOT NULL,
+  kind         text NOT NULL DEFAULT 'break' CHECK (kind IN ('break', 'unavailable')) -- 休憩 or 不可（施術者都合で不可）
 );
 
 CREATE INDEX idx_therapist_breaks_shift_id ON therapist_breaks(shift_id);

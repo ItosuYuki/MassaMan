@@ -98,6 +98,7 @@ erDiagram
 | shift_id | uuid FK → therapist_shifts, NOT NULL | |
 | break_start | time, NOT NULL | |
 | break_end | time, NOT NULL | |
+| kind | text, NOT NULL DEFAULT 'break' | `break`（休憩）/ `unavailable`（施術不可）。シフト範囲内の一区間が空いていない理由を区別する |
 
 #### `rooms`（施術室）
 | column | type | note |

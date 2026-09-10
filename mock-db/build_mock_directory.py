@@ -71,7 +71,8 @@ CREATE TABLE therapist_breaks (
   id           TEXT PRIMARY KEY,
   shift_id     TEXT NOT NULL REFERENCES therapist_shifts(id),
   break_start  TEXT NOT NULL,
-  break_end    TEXT NOT NULL
+  break_end    TEXT NOT NULL,
+  kind         TEXT NOT NULL CHECK (kind IN ('break', 'unavailable')) DEFAULT 'break'
 );
 
 CREATE TABLE rooms (
