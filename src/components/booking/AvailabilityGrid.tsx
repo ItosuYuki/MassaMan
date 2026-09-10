@@ -93,9 +93,10 @@ export function AvailabilityGrid(props: {
       <div className="relative hidden sm:grid sm:grid-cols-[56px_repeat(5,1fr)] sm:gap-1">
         {selectedTickIndex !== -1 && (
           <div
-            className="pointer-events-none absolute inset-0 rounded-md border-2 border-accent-strong bg-accent-soft"
+            className="pointer-events-none absolute inset-0 rounded-md border-2 border-accent-strong"
             style={{
-              gridColumn: selectedDayIndex + 2,
+              gridColumnStart: selectedDayIndex + 2,
+              gridColumnEnd: selectedDayIndex + 3,
               gridRowStart: selectedTickIndex + 2,
               gridRowEnd: selectedTickIndex + 2 + highlightRowCount,
             }}
