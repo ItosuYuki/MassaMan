@@ -15,7 +15,16 @@ import {
 import { computeSlotStatus, type SlotStatus } from "./availability";
 import { computeOccupancyRate } from "./occupancy";
 import { autoAssignTherapist, type TherapistCandidate } from "./auto-assign";
-import { getStore, nextReservationId, ROOMS, THERAPISTS, type Gender, type Reservation } from "./mock-data";
+import {
+  getStore,
+  nextReservationId,
+  nextReviewId,
+  ROOMS,
+  THERAPISTS,
+  type Gender,
+  type Reservation,
+  type Review,
+} from "./mock-data";
 import { sendSlackMessage } from "@/lib/notifications/slack";
 
 /** Post-treatment cleanup buffer: nobody else may book this therapist/room for this long after. */
@@ -287,17 +296,81 @@ export async function getMyReservations(limit = 5): Promise<MyReservation[]> {
     .map(({ id, date, startMinutes, durationMinutes, note }) => ({ id, date, startMinutes, durationMinutes, note }));
 }
 
+export type MyReview = { rating: number; comment: string };
+
+export type HistoryEntry = MyReservation & {
+  therapistName: string;
+  therapistSpecialty: string;
+  review: MyReview | null;
+};
+
 /** The current user's past reservations, most recent first, for the mypage treatment history. */
-export async function getMyReservationHistory(limit = 5): Promise<MyReservation[]> {
+export async function getMyReservationHistory(limit = 5): Promise<HistoryEntry[]> {
   const session = await requireRole("user");
-  const { reservations } = getStore();
+  const { reservations, reviews } = getStore();
   const now = new Date();
 
   return reservations
     .filter((r) => r.userEmployeeId === session.employeeId && isSlotInPast(r.date, r.startMinutes, now))
     .sort((a, b) => (a.date === b.date ? b.startMinutes - a.startMinutes : a.date < b.date ? 1 : -1))
     .slice(0, limit)
-    .map(({ id, date, startMinutes, durationMinutes, note }) => ({ id, date, startMinutes, durationMinutes, note }));
+    .map((r) => {
+      const therapist = THERAPISTS.find((t) => t.id === r.therapistId);
+      const review = reviews.find((rv) => rv.reservationId === r.id);
+      return {
+        id: r.id,
+        date: r.date,
+        startMinutes: r.startMinutes,
+        durationMinutes: r.durationMinutes,
+        note: r.note,
+        therapistName: therapist?.name ?? "不明",
+        therapistSpecialty: therapist?.specialty ?? "",
+        review: review ? { rating: review.rating, comment: review.comment } : null,
+      };
+    });
+}
+
+/**
+ * Submits a 1-5 star review (comment optional) for a past reservation of the current
+ * user's. One review per reservation, matching db/schema.sql's UNIQUE reservation_id —
+ * anonymous by design, so no reviewer identity is stored alongside the review itself.
+ */
+export async function submitReview(
+  reservationId: string,
+  rating: number,
+  comment: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await requireRole("user");
+  const store = getStore();
+
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    return { ok: false, error: "評価は1〜5の範囲で選択してください。" };
+  }
+
+  const reservation = store.reservations.find((r) => r.id === reservationId);
+  if (!reservation) {
+    return { ok: false, error: "予約が見つかりません。" };
+  }
+  if (reservation.userEmployeeId !== session.employeeId) {
+    return { ok: false, error: "この予約にレビューを投稿する権限がありません。" };
+  }
+  if (!isSlotInPast(reservation.date, reservation.startMinutes, new Date())) {
+    return { ok: false, error: "施術が完了してからレビューを投稿できます。" };
+  }
+  if (store.reviews.some((r) => r.reservationId === reservationId)) {
+    return { ok: false, error: "この予約にはすでにレビューが投稿されています。" };
+  }
+
+  const review: Review = {
+    id: nextReviewId(),
+    reservationId,
+    rating,
+    comment,
+    createdAt: Date.now(),
+  };
+  store.reviews.push(review);
+
+  return { ok: true };
 }
 
 export type OpenSlot = { date: string; startMinutes: number };

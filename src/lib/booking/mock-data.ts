@@ -36,6 +36,14 @@ export type Reservation = {
   createdAt: number;
 };
 
+export type Review = {
+  id: string;
+  reservationId: string; // one review per reservation (matches db/schema.sql's UNIQUE reservation_id)
+  rating: number; // 1-5
+  comment: string;
+  createdAt: number;
+};
+
 export const ROOMS: Room[] = [
   { id: "room-1", name: "第1マッサージ室" },
   { id: "room-2", name: "第2マッサージ室" },
@@ -48,7 +56,7 @@ export const THERAPISTS: Therapist[] = [
   { id: "T2004", name: "佐藤 香", gender: "female", specialty: "むくみ・冷え" },
 ];
 
-type Store = { reservations: Reservation[]; nextId: number };
+type Store = { reservations: Reservation[]; reviews: Review[]; nextId: number; nextReviewId: number };
 
 const globalForBookingStore = globalThis as unknown as { __bookingStore?: Store };
 
@@ -88,12 +96,31 @@ function seedReservations(): Reservation[] {
       autoAssigned: false,
       createdAt: Date.now(),
     },
+    // A past treatment so the mypage history/review feature has something to show on first load.
+    {
+      id: "seed-3",
+      userEmployeeId: "E1001",
+      userName: "佐々木 美咲",
+      therapistId: "T2003",
+      roomId: "room-1",
+      date: iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 3)),
+      startMinutes: 14 * 60,
+      durationMinutes: 30,
+      note: "",
+      autoAssigned: true,
+      createdAt: Date.now(),
+    },
   ];
 }
 
 export function getStore(): Store {
   if (!globalForBookingStore.__bookingStore) {
-    globalForBookingStore.__bookingStore = { reservations: seedReservations(), nextId: 1 };
+    globalForBookingStore.__bookingStore = {
+      reservations: seedReservations(),
+      reviews: [],
+      nextId: 1,
+      nextReviewId: 1,
+    };
   }
   return globalForBookingStore.__bookingStore;
 }
@@ -102,5 +129,12 @@ export function nextReservationId(): string {
   const store = getStore();
   const id = `res-${store.nextId}`;
   store.nextId += 1;
+  return id;
+}
+
+export function nextReviewId(): string {
+  const store = getStore();
+  const id = `review-${store.nextReviewId}`;
+  store.nextReviewId += 1;
   return id;
 }
