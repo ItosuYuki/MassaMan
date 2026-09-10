@@ -252,7 +252,7 @@ export function BookingClient() {
           />
         </div>
         {selectedStartMinutes !== null && (
-          <div className="hidden sm:block">
+          <div className="rounded-xl border border-accent bg-accent-soft p-3">
             <p className="mb-1 text-xs text-ink-faint">選択中の日時</p>
             <p className="mono text-base font-bold text-accent-strong">
               {formatDateWithWeekday(selectedDate)} {confirmTimeLabel}
