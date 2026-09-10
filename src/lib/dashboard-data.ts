@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "@/lib/db";
+import { sql } from "@/lib/db";
 import { trendBuckets, HOURS, type DateRange, type PeriodType, type TrendBucket } from "@/lib/period";
 
 export { HOURS };
@@ -40,112 +40,90 @@ function hourOf(time: string): number {
   return Number(time.split(":")[0]);
 }
 
-function fetchShifts(range: DateRange, therapistId?: string): ShiftRow[] {
-  const sql = therapistId
-    ? "SELECT therapist_id, work_date, start_time, end_time FROM therapist_shifts WHERE work_date BETWEEN ? AND ? AND therapist_id = ?"
-    : "SELECT therapist_id, work_date, start_time, end_time FROM therapist_shifts WHERE work_date BETWEEN ? AND ?";
-  const params = therapistId ? [range.start, range.end, therapistId] : [range.start, range.end];
-  return db.prepare(sql).all(...params) as ShiftRow[];
+async function fetchShifts(range: DateRange, therapistId?: string): Promise<ShiftRow[]> {
+  const therapistClause = therapistId ? sql`AND therapist_id = ${therapistId}` : sql``;
+  return sql<ShiftRow[]>`
+    SELECT therapist_id, work_date, start_time, end_time
+    FROM therapist_shifts
+    WHERE work_date BETWEEN ${range.start} AND ${range.end}
+      ${therapistClause}
+  `;
 }
 
-/** WHERE-clause fragments + params for the age/gender/department filters, shared by
+/** WHERE-clause fragment for the age/gender/department filters, shared by
  * reservation and headcount queries so the two stay in sync (§ the "全体をその属性
  * 全体で考える" rule: narrowing the numerator must narrow the denominator to match). */
-function attributeWhere(
-  filters: AttributeFilter,
-  extra?: { attribute: AttributeKind; value: string }
-): { clause: string; params: (string | number)[] } {
-  const clauses: string[] = [];
-  const params: (string | number)[] = [];
-
+function attributeWhere(filters: AttributeFilter, extra?: { attribute: AttributeKind; value: string }) {
   const age = extra?.attribute === "age" ? extra.value : filters.ageBracket;
   const gender = extra?.attribute === "gender" ? extra.value : filters.gender;
   const department = extra?.attribute === "department" ? extra.value : filters.department;
 
-  if (age !== "all") {
-    clauses.push("u.age_bracket = ?");
-    params.push(age);
-  }
-  if (gender !== "all") {
-    clauses.push("u.gender = ?");
-    params.push(gender);
-  }
-  if (department !== "all") {
-    clauses.push("d.name = ?");
-    params.push(department);
-  }
-
-  return { clause: clauses.map((c) => ` AND ${c}`).join(""), params };
+  return sql`
+    ${age !== "all" ? sql`AND u.age_bracket = ${age}::age_bracket` : sql``}
+    ${gender !== "all" ? sql`AND u.gender = ${gender}::gender` : sql``}
+    ${department !== "all" ? sql`AND d.name = ${department}` : sql``}
+  `;
 }
 
-function fetchReservations(
+async function fetchReservations(
   range: DateRange,
   filters: AttributeFilter,
   therapistId?: string
-): ReservationRow[] {
-  let sql = `
+): Promise<ReservationRow[]> {
+  const therapistClause = therapistId ? sql`AND r.therapist_id = ${therapistId}` : sql``;
+  const attrClause = attributeWhere(filters);
+
+  return sql<ReservationRow[]>`
     SELECT r.therapist_id, r.user_id, r.reservation_date, r.start_time, r.end_time,
            u.age_bracket, u.gender, d.name as department_name
     FROM reservations r
     JOIN users u ON u.id = r.user_id
     LEFT JOIN departments d ON d.id = u.department_id
-    WHERE r.reservation_date BETWEEN ? AND ?
+    WHERE r.reservation_date BETWEEN ${range.start} AND ${range.end}
       AND r.status IN ('confirmed', 'completed')
+      ${therapistClause}
+      ${attrClause}
   `;
-  const params: (string | number)[] = [range.start, range.end];
-
-  if (therapistId) {
-    sql += " AND r.therapist_id = ?";
-    params.push(therapistId);
-  }
-  const attr = attributeWhere(filters);
-  sql += attr.clause;
-  params.push(...attr.params);
-
-  return db.prepare(sql).all(...params) as ReservationRow[];
 }
 
 /** Total *headcount* (role='user' employees) matching the given filters — the
  * denominator for headcount-based 利用率 calculations (used only when a
  * age/gender/department filter is actually active — see isFiltered()). */
-function getHeadcount(filters: AttributeFilter, extra?: { attribute: AttributeKind; value: string }): number {
-  let sql = `
-    SELECT COUNT(*) as n FROM users u
+async function getHeadcount(
+  filters: AttributeFilter,
+  extra?: { attribute: AttributeKind; value: string }
+): Promise<number> {
+  const attrClause = attributeWhere(filters, extra);
+  const rows = await sql<{ n: number }[]>`
+    SELECT COUNT(*)::int as n FROM users u
     LEFT JOIN departments d ON d.id = u.department_id
-    WHERE u.role = 'user' AND u.is_active = 1
+    WHERE u.role = 'user' AND u.is_active = true
+      ${attrClause}
   `;
-  const attr = attributeWhere(filters, extra);
-  sql += attr.clause;
-  const row = db.prepare(sql).get(...attr.params) as { n: number };
-  return row.n;
+  return rows[0].n;
 }
 
 /** Distinct users (role='user') who booked at least once within `range`, matching filters. */
-function getDistinctUserCount(
+async function getDistinctUserCount(
   range: DateRange,
   filters: AttributeFilter,
   therapistId?: string,
   extra?: { attribute: AttributeKind; value: string }
-): number {
-  let sql = `
-    SELECT COUNT(DISTINCT r.user_id) as n
+): Promise<number> {
+  const therapistClause = therapistId ? sql`AND r.therapist_id = ${therapistId}` : sql``;
+  const attrClause = attributeWhere(filters, extra);
+
+  const rows = await sql<{ n: number }[]>`
+    SELECT COUNT(DISTINCT r.user_id)::int as n
     FROM reservations r
     JOIN users u ON u.id = r.user_id
     LEFT JOIN departments d ON d.id = u.department_id
-    WHERE r.reservation_date BETWEEN ? AND ?
+    WHERE r.reservation_date BETWEEN ${range.start} AND ${range.end}
       AND r.status IN ('confirmed', 'completed')
+      ${therapistClause}
+      ${attrClause}
   `;
-  const params: (string | number)[] = [range.start, range.end];
-  if (therapistId) {
-    sql += " AND r.therapist_id = ?";
-    params.push(therapistId);
-  }
-  const attr = attributeWhere(filters, extra);
-  sql += attr.clause;
-  params.push(...attr.params);
-
-  const row = db.prepare(sql).get(...params) as { n: number };
-  return row.n;
+  return rows[0].n;
 }
 
 function sumShiftMinutes(shifts: ShiftRow[]): number {
@@ -175,13 +153,13 @@ export type OverallStats = {
  *   会社の全社員数 for that group, since "occupancy of male employees" isn't a
  *   coherent question, but "what fraction of male employees used it" is.
  */
-export function getOverallStats(range: DateRange, filters: AttributeFilter): OverallStats {
-  const reservations = fetchReservations(range, filters);
+export async function getOverallStats(range: DateRange, filters: AttributeFilter): Promise<OverallStats> {
+  const reservations = await fetchReservations(range, filters);
   const bookedMinutes = sumReservationMinutes(reservations);
 
   const utilizationRate = isFiltered(filters)
-    ? rate(getDistinctUserCount(range, filters), getHeadcount(filters))
-    : rate(bookedMinutes, sumShiftMinutes(fetchShifts(range)));
+    ? rate(await getDistinctUserCount(range, filters), await getHeadcount(filters))
+    : rate(bookedMinutes, sumShiftMinutes(await fetchShifts(range)));
 
   return {
     utilizationRate,
@@ -198,30 +176,32 @@ export type TrendPoint = { label: string; currentRate: number; previousRate: num
  * occupancy-vs-headcount switch as getOverallStats (see its comment), so the
  * trend line and the stat tile always agree. Pass therapistId to scope the
  * whole trend to one therapist (used by the individual view). */
-export function getUtilizationTrend(
+export async function getUtilizationTrend(
   period: PeriodType,
   currentRange: DateRange,
   previousRange: DateRange,
   filters: AttributeFilter,
   therapistId?: string
-): TrendPoint[] {
+): Promise<TrendPoint[]> {
   const filtered = isFiltered(filters);
-  const headcount = filtered ? getHeadcount(filters) : 0;
+  const headcount = filtered ? await getHeadcount(filters) : 0;
 
-  function seriesFor(outerRange: DateRange): number[] {
+  async function seriesFor(outerRange: DateRange): Promise<number[]> {
     const buckets = trendBuckets(period, outerRange);
-    return buckets.map((b) => {
-      if (filtered) {
-        return rate(countUsersInBucket(b, outerRange, filters, therapistId), headcount);
-      }
-      const { booked, available } = countMinutesInBucket(b, outerRange, therapistId);
-      return rate(booked, available);
-    });
+    return Promise.all(
+      buckets.map(async (b) => {
+        if (filtered) {
+          return rate(await countUsersInBucket(b, outerRange, filters, therapistId), headcount);
+        }
+        const { booked, available } = await countMinutesInBucket(b, outerRange, therapistId);
+        return rate(booked, available);
+      })
+    );
   }
 
   const currentBuckets = trendBuckets(period, currentRange);
-  const current = seriesFor(currentRange);
-  const previous = seriesFor(previousRange);
+  const current = await seriesFor(currentRange);
+  const previous = await seriesFor(previousRange);
 
   return currentBuckets.map((b, i) => ({
     label: b.label,
@@ -264,117 +244,103 @@ export function overallAttributeSeries(points: TrendPoint[]): AttributeTrendSeri
  * rate, they don't each independently answer "what % of this group used it".
  * Composes with any active top-filter.
  */
-export function getUtilizationTrendByAttribute(
+export async function getUtilizationTrendByAttribute(
   period: PeriodType,
   range: DateRange,
   attribute: AttributeKind,
   filters: AttributeFilter,
   therapistId?: string,
   selectedKeys?: string[]
-): AttributeTrendSeries[] {
+): Promise<AttributeTrendSeries[]> {
   const buckets = trendBuckets(period, range);
-  const available = buckets.map((b) => countMinutesInBucket(b, range, therapistId).available);
+  const available = await Promise.all(
+    buckets.map(async (b) => (await countMinutesInBucket(b, range, therapistId)).available)
+  );
   const keys =
     selectedKeys && selectedKeys.length > 0
       ? attributeOrder(attribute).filter((k) => selectedKeys.includes(k))
       : attributeOrder(attribute);
 
-  return keys.map((key) => {
-    const extra = { attribute, value: key };
-    return {
-      valueLabel: attributeLabel(attribute, key),
-      points: buckets.map((b, i) => ({
-        label: b.label,
-        rate: rate(countBookedMinutesInBucket(b, range, filters, therapistId, extra), available[i]),
-        closed: b.closed,
-      })),
-    };
-  });
+  return Promise.all(
+    keys.map(async (key) => {
+      const extra = { attribute, value: key };
+      const points = await Promise.all(
+        buckets.map(async (b, i) => ({
+          label: b.label,
+          rate: rate(await countBookedMinutesInBucket(b, range, filters, therapistId, extra), available[i]),
+          closed: b.closed,
+        }))
+      );
+      return { valueLabel: attributeLabel(attribute, key), points };
+    })
+  );
 }
 
 /** Booked minutes within one bucket, narrowed to reservations matching `extra`
  * (and any active top-filter) — the numerator for getUtilizationTrendByAttribute. */
-function countBookedMinutesInBucket(
+async function countBookedMinutesInBucket(
   bucket: TrendBucket,
   outerRange: DateRange,
   filters: AttributeFilter,
   therapistId: string | undefined,
   extra: { attribute: AttributeKind; value: string }
-): number {
-  let sql = `
+): Promise<number> {
+  const bucketClause =
+    bucket.kind === "hour"
+      ? sql`AND r.reservation_date BETWEEN ${outerRange.start} AND ${outerRange.end} AND EXTRACT(HOUR FROM r.start_time)::int = ${bucket.hour}`
+      : sql`AND r.reservation_date BETWEEN ${bucket.start} AND ${bucket.end}`;
+  const therapistClause = therapistId ? sql`AND r.therapist_id = ${therapistId}` : sql``;
+  const attrClause = attributeWhere(filters, extra);
+
+  const rows = await sql<{ start_time: string; end_time: string }[]>`
     SELECT r.start_time, r.end_time
     FROM reservations r
     JOIN users u ON u.id = r.user_id
     LEFT JOIN departments d ON d.id = u.department_id
     WHERE r.status IN ('confirmed', 'completed')
+      ${bucketClause}
+      ${therapistClause}
+      ${attrClause}
   `;
-  const params: (string | number)[] = [];
-
-  if (bucket.kind === "hour") {
-    sql += " AND r.reservation_date BETWEEN ? AND ? AND CAST(substr(r.start_time, 1, 2) AS INTEGER) = ?";
-    params.push(outerRange.start, outerRange.end, bucket.hour);
-  } else {
-    sql += " AND r.reservation_date BETWEEN ? AND ?";
-    params.push(bucket.start, bucket.end);
-  }
-  if (therapistId) {
-    sql += " AND r.therapist_id = ?";
-    params.push(therapistId);
-  }
-
-  const attr = attributeWhere(filters, extra);
-  sql += attr.clause;
-  params.push(...attr.params);
-
-  const rows = db.prepare(sql).all(...params) as { start_time: string; end_time: string }[];
   return rows.reduce((sum, r) => sum + minutesBetween(r.start_time, r.end_time), 0);
 }
 
-function countUsersInBucket(
+async function countUsersInBucket(
   bucket: TrendBucket,
   outerRange: DateRange,
   filters: AttributeFilter,
   therapistId?: string,
   extra?: { attribute: AttributeKind; value: string }
-): number {
-  let sql = `
-    SELECT COUNT(DISTINCT r.user_id) as n
+): Promise<number> {
+  const bucketClause =
+    bucket.kind === "hour"
+      ? sql`AND r.reservation_date BETWEEN ${outerRange.start} AND ${outerRange.end} AND EXTRACT(HOUR FROM r.start_time)::int = ${bucket.hour}`
+      : sql`AND r.reservation_date BETWEEN ${bucket.start} AND ${bucket.end}`;
+  const therapistClause = therapistId ? sql`AND r.therapist_id = ${therapistId}` : sql``;
+  const attrClause = attributeWhere(filters, extra);
+
+  const rows = await sql<{ n: number }[]>`
+    SELECT COUNT(DISTINCT r.user_id)::int as n
     FROM reservations r
     JOIN users u ON u.id = r.user_id
     LEFT JOIN departments d ON d.id = u.department_id
     WHERE r.status IN ('confirmed', 'completed')
+      ${bucketClause}
+      ${therapistClause}
+      ${attrClause}
   `;
-  const params: (string | number)[] = [];
-
-  if (bucket.kind === "hour") {
-    sql += " AND r.reservation_date BETWEEN ? AND ? AND CAST(substr(r.start_time, 1, 2) AS INTEGER) = ?";
-    params.push(outerRange.start, outerRange.end, bucket.hour);
-  } else {
-    sql += " AND r.reservation_date BETWEEN ? AND ?";
-    params.push(bucket.start, bucket.end);
-  }
-  if (therapistId) {
-    sql += " AND r.therapist_id = ?";
-    params.push(therapistId);
-  }
-
-  const attr = attributeWhere(filters, extra);
-  sql += attr.clause;
-  params.push(...attr.params);
-
-  const row = db.prepare(sql).get(...params) as { n: number };
-  return row.n;
+  return rows[0].n;
 }
 
 /** Booked vs. available (shift) minutes within one trend bucket — the occupancy
  * building block shared by getUtilizationTrend and getVacancyTrend. */
-function countMinutesInBucket(
+async function countMinutesInBucket(
   bucket: TrendBucket,
   outerRange: DateRange,
   therapistId?: string
-): { booked: number; available: number } {
-  const shifts = fetchShifts(outerRange, therapistId);
-  const reservations = fetchReservations(outerRange, DEFAULT_FILTER, therapistId);
+): Promise<{ booked: number; available: number }> {
+  const shifts = await fetchShifts(outerRange, therapistId);
+  const reservations = await fetchReservations(outerRange, DEFAULT_FILTER, therapistId);
 
   let available = 0;
   for (const s of shifts) {
@@ -406,16 +372,22 @@ export type VacancyPoint = { label: string; vacantHours: number; closed: boolean
  * bucketed with the SAME trendBuckets() as getUtilizationTrend so the two charts
  * stay visually synced regardless of period. Pass therapistId to scope to one
  * therapist (used by the individual view). */
-export function getVacancyTrend(period: PeriodType, range: DateRange, therapistId?: string): VacancyPoint[] {
+export async function getVacancyTrend(
+  period: PeriodType,
+  range: DateRange,
+  therapistId?: string
+): Promise<VacancyPoint[]> {
   const buckets = trendBuckets(period, range);
-  return buckets.map((b) => {
-    const { booked, available } = countMinutesInBucket(b, range, therapistId);
-    return {
-      label: b.label,
-      vacantHours: Math.round(Math.max(0, available - booked) / 6) / 10,
-      closed: b.closed,
-    };
-  });
+  return Promise.all(
+    buckets.map(async (b) => {
+      const { booked, available } = await countMinutesInBucket(b, range, therapistId);
+      return {
+        label: b.label,
+        vacantHours: Math.round(Math.max(0, available - booked) / 6) / 10,
+        closed: b.closed,
+      };
+    })
+  );
 }
 
 export type TherapistUtilization = { therapistId: string; name: string; rate: number };
@@ -428,23 +400,26 @@ export type TherapistUtilization = { therapistId: string; name: string; rate: nu
  * sense for an occupancy metric — working fewer hours mechanically lowers
  * occupancy, but wouldn't lower a distinct-client-count ratio the same way.
  */
-export function getTherapistUtilization(range: DateRange, filters: AttributeFilter): TherapistUtilization[] {
-  const therapists = db
-    .prepare(
-      `SELECT tp.id as therapist_id, u.name FROM therapist_profiles tp
-       JOIN users u ON u.id = tp.user_id WHERE tp.is_active = 1 ORDER BY u.name`
-    )
-    .all() as { therapist_id: string; name: string }[];
+export async function getTherapistUtilization(
+  range: DateRange,
+  filters: AttributeFilter
+): Promise<TherapistUtilization[]> {
+  const therapists = await sql<{ therapist_id: string; name: string }[]>`
+    SELECT tp.id as therapist_id, u.name FROM therapist_profiles tp
+    JOIN users u ON u.id = tp.user_id WHERE tp.is_active = true ORDER BY u.name
+  `;
 
-  return therapists.map((t) => {
-    const shifts = fetchShifts(range, t.therapist_id);
-    const reservations = fetchReservations(range, filters, t.therapist_id);
-    return {
-      therapistId: t.therapist_id,
-      name: t.name,
-      rate: rate(sumReservationMinutes(reservations), sumShiftMinutes(shifts)),
-    };
-  });
+  return Promise.all(
+    therapists.map(async (t) => {
+      const shifts = await fetchShifts(range, t.therapist_id);
+      const reservations = await fetchReservations(range, filters, t.therapist_id);
+      return {
+        therapistId: t.therapist_id,
+        name: t.name,
+        rate: rate(sumReservationMinutes(reservations), sumShiftMinutes(shifts)),
+      };
+    })
+  );
 }
 
 export type AttributeBucket = { label: string; rate: number };
@@ -476,29 +451,31 @@ export function attributeValueOptions(attribute: AttributeKind): { value: string
  * only by any other active top-filter, e.g. gender=男性), never re-scoped down
  * to the bucket's own subgroup size. That keeps small groups (e.g. a
  * 3-person department) from trivially reading as ~100%. */
-export function getAttributeUtilization(
+export async function getAttributeUtilization(
   range: DateRange,
   attribute: AttributeKind,
   filters: AttributeFilter,
   therapistId?: string
-): AttributeBucket[] {
-  const headcount = getHeadcount(filters);
-  return attributeOrder(attribute).map((key) => {
-    const extra = { attribute, value: key };
-    return {
-      label: attributeLabel(attribute, key),
-      rate: rate(getDistinctUserCount(range, filters, therapistId, extra), headcount),
-    };
-  });
+): Promise<AttributeBucket[]> {
+  const headcount = await getHeadcount(filters);
+  return Promise.all(
+    attributeOrder(attribute).map(async (key) => {
+      const extra = { attribute, value: key };
+      return {
+        label: attributeLabel(attribute, key),
+        rate: rate(await getDistinctUserCount(range, filters, therapistId, extra), headcount),
+      };
+    })
+  );
 }
 
 /** Share (%) of a therapist's own client base per attribute bucket — sums to ~100, unlike getAttributeUtilization. */
-export function getClientAttributeShare(
+export async function getClientAttributeShare(
   range: DateRange,
   attribute: AttributeKind,
   therapistId: string
-): AttributeBucket[] {
-  const reservations = fetchReservations(range, DEFAULT_FILTER, therapistId);
+): Promise<AttributeBucket[]> {
+  const reservations = await fetchReservations(range, DEFAULT_FILTER, therapistId);
   const total = reservations.length;
 
   const counts = new Map<string, number>();
@@ -534,23 +511,21 @@ export type TherapistSummary = {
  * unfiltered, headcount ratio (this therapist's distinct clients ÷ total
  * headcount) when a filter is active — same switch as getOverallStats, so
  * 全体平均 (computed the same way, company-wide) is always a fair comparison. */
-export function getTherapistSummary(
+export async function getTherapistSummary(
   therapistId: string,
   range: DateRange,
   filters: AttributeFilter
-): TherapistSummary {
-  const profile = db
-    .prepare(
-      `SELECT tp.id as therapist_id, u.name, tp.specialties FROM therapist_profiles tp
-       JOIN users u ON u.id = tp.user_id WHERE tp.id = ?`
-    )
-    .get(therapistId) as { therapist_id: string; name: string; specialties: string | null } | undefined;
-
+): Promise<TherapistSummary> {
+  const profiles = await sql<{ therapist_id: string; name: string; specialties: string[] | null }[]>`
+    SELECT tp.id as therapist_id, u.name, tp.specialties FROM therapist_profiles tp
+    JOIN users u ON u.id = tp.user_id WHERE tp.id = ${therapistId}
+  `;
+  const profile = profiles[0];
   if (!profile) {
     throw new Error(`Unknown therapist: ${therapistId}`);
   }
 
-  const reservations = fetchReservations(range, filters, therapistId);
+  const reservations = await fetchReservations(range, filters, therapistId);
   const bookedMinutes = sumReservationMinutes(reservations);
 
   const userCounts = new Map<string, number>();
@@ -562,21 +537,21 @@ export function getTherapistSummary(
   let personalRate: number;
   let overallAvgRate: number;
   if (isFiltered(filters)) {
-    const headcount = getHeadcount(filters);
-    personalRate = rate(getDistinctUserCount(range, filters, therapistId), headcount);
-    overallAvgRate = rate(getDistinctUserCount(range, filters), headcount);
+    const headcount = await getHeadcount(filters);
+    personalRate = rate(await getDistinctUserCount(range, filters, therapistId), headcount);
+    overallAvgRate = rate(await getDistinctUserCount(range, filters), headcount);
   } else {
-    personalRate = rate(bookedMinutes, sumShiftMinutes(fetchShifts(range, therapistId)));
+    personalRate = rate(bookedMinutes, sumShiftMinutes(await fetchShifts(range, therapistId)));
     overallAvgRate = rate(
-      sumReservationMinutes(fetchReservations(range, filters)),
-      sumShiftMinutes(fetchShifts(range))
+      sumReservationMinutes(await fetchReservations(range, filters)),
+      sumShiftMinutes(await fetchShifts(range))
     );
   }
 
   return {
     therapistId: profile.therapist_id,
     name: profile.name,
-    specialties: profile.specialties,
+    specialties: profile.specialties?.[0] ?? null,
     personalRate,
     overallAvgRate,
     reservationCount: reservations.length,
@@ -587,17 +562,14 @@ export function getTherapistSummary(
 
 export type TherapistOption = { therapistId: string; name: string };
 
-export function listTherapists(): TherapistOption[] {
-  return db
-    .prepare(
-      `SELECT tp.id as therapistId, u.name FROM therapist_profiles tp
-       JOIN users u ON u.id = tp.user_id WHERE tp.is_active = 1 ORDER BY u.name`
-    )
-    .all() as TherapistOption[];
+export async function listTherapists(): Promise<TherapistOption[]> {
+  return sql<TherapistOption[]>`
+    SELECT tp.id as "therapistId", u.name FROM therapist_profiles tp
+    JOIN users u ON u.id = tp.user_id WHERE tp.is_active = true ORDER BY u.name
+  `;
 }
 
-export function listDepartments(): string[] {
-  return (db.prepare("SELECT name FROM departments ORDER BY name").all() as { name: string }[]).map(
-    (d) => d.name
-  );
+export async function listDepartments(): Promise<string[]> {
+  const rows = await sql<{ name: string }[]>`SELECT name FROM departments ORDER BY name`;
+  return rows.map((d) => d.name);
 }
