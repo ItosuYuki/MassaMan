@@ -92,9 +92,10 @@ matches reality before relying on it, since it will keep drifting as more featur
 - `src/components/` — shared components (currently just `role-home.tsx`, the placeholder each
   role's home page renders after login).
 - `src/lib/` — `session.ts` (jose-based signed session cookie), `dal.ts` (`verifySession`/
-  `requireRole`, the Data Access Layer per Next.js's own auth guidance), `db.ts` (opens
-  `mock-db/mock_directory.sqlite3` via Node's built-in `node:sqlite`), `employees.ts`
-  (`findEmployeeByCode`, queries that database — see below).
+  `requireRole`, the Data Access Layer per Next.js's own auth guidance), `db.ts` (opens a
+  `postgres.js` connection to the local Docker-run PostgreSQL, wrapped in Drizzle ORM —
+  see `src/db/schema.ts` for the schema and `docker-compose.yml` for the local server),
+  `employees.ts` (`findEmployeeByCode`, queries that database — see below).
 - `src/proxy.ts` — Next.js 16 renamed `middleware.js` to `proxy.js`; does the optimistic
   (cookie-only) auth redirect. Per-route/Server Action checks still happen via `dal.ts` — Next's
   own docs are explicit that Proxy alone is not sufficient.
@@ -104,17 +105,13 @@ matches reality before relying on it, since it will keep drifting as more featur
 - **Method**: employee number + password, via a Server Action (`src/app/actions/auth.ts`).
   There's also a disabled "社内アカウントでログイン" (SSO) button in the UI, matching the
   mockups — no SSO provider is chosen yet, so it's inert.
-- **Credential store**: `src/lib/employees.ts` queries `mock-db/mock_directory.sqlite3` (built by
-  `mock-db/build_mock_directory.py`; see `docs/database-auth-design.md` and
-  `mock-db/test-credentials.md` for the 8 test accounts / shared test password). This is a local
-  SQLite stand-in for the real `db/schema.sql` PostgreSQL schema — this app is a Tech Jam
-  prototype not meant for production deployment, so no real Postgres is provisioned; auth is the
-  only piece currently wired to a database at all (reservations/etc. still don't exist as
-  features). The `.sqlite3` file itself is gitignored — generate it with
-  `pip install bcrypt && python3 mock-db/build_mock_directory.py` before running the app.
-- **`node:sqlite` requires a flag**: it's still experimental in Node 22, so `package.json`'s
-  `dev`/`build`/`start` scripts set `NODE_OPTIONS=--experimental-sqlite`. `@types/node` is pinned
-  to `^22` (not the scaffold's original `^20`) so its `node:sqlite` type declarations are present.
+- **Credential store**: `src/lib/employees.ts` queries the real PostgreSQL database (via
+  Drizzle ORM, `src/db/schema.ts`) — see `docs/database-auth-design.md` and its §5 for the
+  8 test accounts / shared test password. Run `docker compose up -d` to start Postgres
+  locally, then `pnpm db:generate && pnpm db:migrate && pnpm db:seed` to build the schema
+  and populate test data before running the app (see
+  `docs/superpowers/specs/2026-09-10-postgres-migration-design.md` for the full migration
+  design).
 - **Session**: signed (HS256, `jose`), stored in an `httpOnly` cookie. Secret comes from
   `SESSION_SECRET` in `.env.local` (see `.env.example`; generate with `openssl rand -base64 32`).
 - Feature backlog beyond auth (the actual booking/schedule/dashboard screens, notification

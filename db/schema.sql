@@ -1,11 +1,15 @@
 -- マッサマン (Massage Manager) — PostgreSQL schema
 --
+-- Historical record of the original schema design. The implementation's actual
+-- source of truth is now src/db/schema.ts (Drizzle ORM) — see
+-- docs/superpowers/specs/2026-09-10-postgres-migration-design.md. This file is
+-- no longer applied directly (drizzle-kit generates the real migrations under
+-- drizzle/); kept here so the original design rationale stays discoverable.
+--
 -- Implements the design decided in database-auth-design.md:
 --   - employee-ID + bcrypt-hashed password auth, cookie session (app-layer, not in this schema)
 --   - double-booking prevention via DB-level exclusion constraints (not app-code checks)
 --   - anonymity rule: DB always holds full data; masking happens in the API response layer
---
--- Apply with: psql "$DATABASE_URL" -f db/schema.sql
 
 BEGIN;
 
