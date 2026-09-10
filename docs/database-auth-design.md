@@ -103,7 +103,7 @@ erDiagram
 | column | type | note |
 |---|---|---|
 | id | uuid PK | |
-| name | text, NOT NULL | 第1マッサージ室／第2マッサージ室 |
+| name | text, NOT NULL | ベッドA／ベッドB／ベッドC |
 
 #### `reservations`（予約） ※最重要テーブル
 | column | type | note |
@@ -158,7 +158,7 @@ EXCLUDE USING gist (
   ) WITH &&
 ) WHERE (status = 'confirmed');
 
--- 部屋が2室しかないため、部屋の二重利用も同様に防止
+-- ベッドは3床しかないため、ベッドの二重利用も同様に防止
 ALTER TABLE reservations ADD CONSTRAINT no_overlap_per_room
 EXCLUDE USING gist (
   room_id WITH =,

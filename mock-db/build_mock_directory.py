@@ -124,7 +124,7 @@ ACCOUNTS = [
     ("A3001", "鈴木 一郎", "admin", "male", "総務部"),
 ]
 
-ROOMS = ["第1マッサージ室", "第2マッサージ室"]
+ROOMS = ["ベッドA", "ベッドB", "ベッドC"]
 
 # Sample reservations for T2002 (木村健), mirroring
 # design/therapist-bookings-desktop.html. day_offset is relative to the date the
@@ -134,6 +134,12 @@ RESERVATIONS = [
     ("T2002", "E1002", 0, "09:00", "09:30", None),
     ("T2002", "E1001", 0, "12:00", "12:45", "肩と首の張りが強い。デスクワーク中心。"),
     ("T2002", "E1003", 0, "19:00", "19:45", "腰が重い。長時間の立ち仕事が続いている。"),
+    # Up-to-2-per-hour case: each reservation is a 15-min treatment (the
+    # shortest user-selectable duration) plus the mandatory 15-min post-use
+    # cleaning, so two fit back to back inside one hour without overlapping:
+    # 15:00-15:15 treat, 15:15-15:30 clean, 15:30-15:45 treat, 15:45-16:00 clean.
+    ("T2002", "E1001", 0, "15:00", "15:15", None),
+    ("T2002", "E1002", 0, "15:30", "15:45", None),
     ("T2002", "E1003", 1, "10:00", "10:30", None),
     ("T2002", "E1002", 1, "15:00", "15:45", None),
 ]

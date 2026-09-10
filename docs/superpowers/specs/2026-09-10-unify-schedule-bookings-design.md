@@ -50,7 +50,7 @@ single page.
 - New unified page at `/schedule` (keeps the existing route; `/bookings`
   and `src/app/(therapist)/bookings/` are deleted). `HOME_PATH_BY_ROLE.therapist`
   in `src/lib/dal.ts` already points at `/schedule` — no change needed there.
-- Sidebar nav collapses to one item, labeled "勤務・予約", instead of the
+- Sidebar nav collapses to one item, labeled "マイスケジュール", instead of the
   current two ("勤務時間登録" / "予約確認").
 - `src/app/(therapist)/schedule/page.tsx` fetches, per weekday in the
   displayed week: `getDayAvailability` (existing) AND

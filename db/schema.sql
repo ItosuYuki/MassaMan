@@ -101,7 +101,7 @@ CREATE INDEX idx_therapist_breaks_shift_id ON therapist_breaks(shift_id);
 
 CREATE TABLE rooms (
   id   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name text NOT NULL -- 第1マッサージ室／第2マッサージ室
+  name text NOT NULL -- ベッドA／ベッドB／ベッドC
 );
 
 -- ---------------------------------------------------------------------------
@@ -140,7 +140,7 @@ EXCLUDE USING gist (
   ) WITH &&
 ) WHERE (status = 'confirmed');
 
--- 部屋が2室しかないため、部屋の二重利用も同様に防止
+-- ベッドは3床しかないため、ベッドの二重利用も同様に防止
 ALTER TABLE reservations ADD CONSTRAINT no_overlap_per_room
 EXCLUDE USING gist (
   room_id WITH =,
