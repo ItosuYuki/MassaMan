@@ -260,7 +260,8 @@ export function AttributeTrendChart({ series, showPrevious }: { series: Attribut
   );
 }
 
-/** 施術時間 (booked) stacked with 空き時間 (vacant) into one bar per bucket —
+/** 稼働時間 (booked, cleanup buffer included — occupied room time, not pure
+ * treatment time) stacked with 空き時間 (vacant) into one bar per bucket —
  * a 空き時間-only bar told only half the story (vacant relative to what?);
  * stacking both onto the shift-time axis they actually share answers that. */
 export function ShiftBreakdownChart({ points }: { points: ShiftBreakdownPoint[] }) {
@@ -274,7 +275,7 @@ export function ShiftBreakdownChart({ points }: { points: ShiftBreakdownPoint[] 
       <div className="flex items-center gap-3 mb-2 text-[11px] text-ink-faint">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "var(--color-accent)" }} />
-          施術時間
+          稼働時間
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "var(--color-accent)", opacity: 0.35 }} />

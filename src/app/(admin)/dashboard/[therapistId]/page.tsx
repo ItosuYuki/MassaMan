@@ -89,15 +89,10 @@ export default async function TherapistDashboardPage({
   const params = { period: sp.period, ref: sp.ref, compare: sp.compare, lineAttr: sp.lineAttr, lineValues: sp.lineValues };
   const basePath = `/dashboard/${therapistId}`;
   const initial = summary.name.trim().split(" ").pop()?.slice(0, 1) ?? "?";
-  const isFiltered = filters.ageBracket.length > 0 || filters.gender.length > 0 || filters.department.length > 0;
   const trendDescription =
     lineValues.length > 0
-      ? isFiltered
-        ? "絞り込み対象の予約時間のうち、各属性が占める内訳です（分母は予約時間で、上部の「個人利用率」（利用した社員数の割合）とは算出方法が異なります）"
-        : "全体の利用率のうち、各属性が占める内訳です（合計すると全体利用率になります）"
-      : isFiltered
-        ? "絞り込み対象の利用者のうち、利用した人数の割合の推移です"
-        : "予約枠がどれくらい埋まっているか（稼働の割合）の推移です";
+      ? "全体の稼働時間のうち、各属性の予約が占める内訳です（合計すると全体利用率になります）"
+      : "予約枠がどれくらい埋まっているか（稼働時間に対する割合）の推移です";
 
   return (
     <DashboardShell
@@ -126,7 +121,7 @@ export default async function TherapistDashboardPage({
     >
       <div className="grid grid-cols-4 gap-3.5">
         <StatTile
-          label="個人利用率"
+          label="個人利用率（稼働時間）"
           value={summary.personalRate}
           unit="%"
           highlight
@@ -197,7 +192,8 @@ export default async function TherapistDashboardPage({
         </div>
 
         <div className="bg-surface border border-border rounded-2xl px-6 py-5.5 flex flex-col">
-          <h3 className="text-sm mb-3.5">属性別 利用率</h3>
+          <h3 className="text-sm mb-0.5">属性別 利用率（利用人数）</h3>
+          <p className="mb-3.5 text-[11px] text-ink-faint">利用した社員の人数に占める割合です</p>
           <AttributeBarSections buckets={attributeBuckets} />
         </div>
       </div>
