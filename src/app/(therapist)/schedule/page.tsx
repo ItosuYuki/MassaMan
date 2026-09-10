@@ -1,6 +1,9 @@
 import { requireRole } from "@/lib/dal";
 import { findTherapistProfileIdByEmployeeCode } from "@/lib/employees";
 import { getDayAvailability } from "@/lib/shifts";
+import { currentSlotIndex } from "@/lib/shift-slots";
+import { getReservationsForTherapist } from "@/lib/reservations";
+import { getNotificationSettings } from "@/lib/notifications";
 import { ScheduleView } from "./schedule-view";
 
 const WEEKDAY_LABELS = ["月", "火", "水", "木", "金"];
@@ -30,7 +33,9 @@ export default async function SchedulePage({
   const requestedMonday = week && !Number.isNaN(Date.parse(week)) ? new Date(week) : new Date();
   const monday = mondayOf(requestedMonday);
 
-  const todayIso = toIso(new Date());
+  const now = new Date();
+  const todayIso = toIso(now);
+  const nowTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
   const days = Array.from({ length: 5 }, (_, i) => {
     const date = new Date(monday.getTime() + i * DAY_MS);
@@ -39,13 +44,17 @@ export default async function SchedulePage({
       dateIso,
       label: `${WEEKDAY_LABELS[i]} ${date.getMonth() + 1}/${date.getDate()}`,
       slots: therapistProfileId ? getDayAvailability(therapistProfileId, dateIso) : [],
+      events: therapistProfileId ? getReservationsForTherapist(therapistProfileId, dateIso) : [],
       isPast: dateIso < todayIso,
+      isToday: dateIso === todayIso,
+      lockedUpTo: dateIso === todayIso ? currentSlotIndex(now) : 0,
     };
   });
 
   const weekLabel = `${monday.getFullYear()}年${monday.getMonth() + 1}月${monday.getDate()}日の週`;
   const prevWeekIso = toIso(new Date(monday.getTime() - 7 * DAY_MS));
   const nextWeekIso = toIso(new Date(monday.getTime() + 7 * DAY_MS));
+  const notification = getNotificationSettings(session.employeeId, "slack");
 
   return (
     <ScheduleView
@@ -55,6 +64,8 @@ export default async function SchedulePage({
       weekLabel={weekLabel}
       prevWeekIso={prevWeekIso}
       nextWeekIso={nextWeekIso}
+      notification={notification}
+      nowTime={nowTime}
     />
   );
 }

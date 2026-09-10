@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/dal";
 import { findTherapistProfileIdByEmployeeCode } from "@/lib/employees";
 import { getDayAvailability, saveDayAvailability, type SlotState } from "@/lib/shifts";
+import { currentSlotIndex } from "@/lib/shift-slots";
 
 export type WeekAvailabilityInput = { dateIso: string; slots: SlotState[] }[];
 
@@ -16,6 +17,21 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Saves one day's slots, but if it's today, keeps whatever is already saved
+ * for the slots at-or-before the current time untouched — the client disables
+ * those cells, but a stale client shouldn't be able to rewrite the past by
+ * sending its own copy of them anyway.
+ */
+function applyDayAvailability(therapistProfileId: string, dateIso: string, slots: SlotState[], today: string) {
+  if (dateIso === today) {
+    const current = getDayAvailability(therapistProfileId, dateIso);
+    const cutoff = currentSlotIndex();
+    slots = slots.map((s, i) => (i < cutoff ? current[i] : s));
+  }
+  saveDayAvailability(therapistProfileId, dateIso, slots);
+}
+
 export async function saveWeekAvailability(days: WeekAvailabilityInput) {
   const session = await requireRole("therapist");
   const therapistProfileId = findTherapistProfileIdByEmployeeCode(session.employeeId);
@@ -24,7 +40,7 @@ export async function saveWeekAvailability(days: WeekAvailabilityInput) {
   const today = todayIso();
   for (const day of days) {
     if (day.dateIso < today) continue;
-    saveDayAvailability(therapistProfileId, day.dateIso, day.slots);
+    applyDayAvailability(therapistProfileId, day.dateIso, day.slots, today);
   }
 
   revalidatePath("/schedule");
@@ -69,7 +85,7 @@ export async function copyWeekAvailability(sourceMondayIso: string, targetDateIs
     for (let i = 0; i < 5; i++) {
       const targetDate = addDaysIso(weekMondayIso, i);
       if (targetDate < today) continue;
-      saveDayAvailability(therapistProfileId, targetDate, sourceSlotsByWeekday[i]);
+      applyDayAvailability(therapistProfileId, targetDate, sourceSlotsByWeekday[i], today);
     }
   }
 

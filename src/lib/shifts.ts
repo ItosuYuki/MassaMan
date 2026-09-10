@@ -19,11 +19,16 @@ const FIND_BREAKS_FOR_SHIFT = db.prepare(`
  * Reconstructs the tri-state grid from the DB's two-level shift+break model:
  * slots outside [start_time, end_time) are "unavailable", slots inside covered
  * by a break are "break", everything else inside the range is "available".
+ *
+ * A day with no saved shift yet defaults to fully "available" (therapists are
+ * assumed on duty during business hours unless they mark an exception), rather
+ * than fully "unavailable".
  */
 export function getDayAvailability(therapistProfileId: string, dateIso: string): SlotState[] {
   const shift = FIND_SHIFT.get(therapistProfileId, dateIso) as ShiftRow | undefined;
+  if (!shift) return Array(SLOT_COUNT).fill("available");
+
   const slots: SlotState[] = Array(SLOT_COUNT).fill("unavailable");
-  if (!shift) return slots;
 
   const breaks = FIND_BREAKS_FOR_SHIFT.all(shift.id) as BreakRow[];
   for (let i = 0; i < SLOT_COUNT; i++) {
@@ -83,4 +88,28 @@ export function saveDayAvailability(therapistProfileId: string, dateIso: string,
       i++;
     }
   }
+}
+
+/**
+ * Marks [rangeStart, rangeEnd) as "unavailable" for this therapist on this day —
+ * used when a therapist cancels a reservation for their own reasons (as opposed
+ * to a client cancelling): unlike a client cancellation, the therapist isn't
+ * available for anyone else in that slot either. Leaves the rest of the day's
+ * availability untouched.
+ */
+export function markRangeUnavailable(
+  therapistProfileId: string,
+  dateIso: string,
+  rangeStart: string,
+  rangeEnd: string
+): void {
+  const slots = getDayAvailability(therapistProfileId, dateIso);
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    const slotStart = slotStartTime(i);
+    const slotEnd = slotStartTime(i + 1);
+    if (slotStart < rangeEnd && slotEnd > rangeStart) {
+      slots[i] = "unavailable";
+    }
+  }
+  saveDayAvailability(therapistProfileId, dateIso, slots);
 }
