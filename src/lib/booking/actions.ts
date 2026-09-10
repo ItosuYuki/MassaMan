@@ -5,6 +5,7 @@ import {
   getWeekDates,
   getTimeSlots,
   formatIsoDate,
+  formatTimeLabel,
   isSlotInPast,
   BUSINESS_DAYS,
   BUSINESS_HOURS,
@@ -15,6 +16,7 @@ import { computeSlotStatus, type SlotStatus } from "./availability";
 import { computeOccupancyRate } from "./occupancy";
 import { autoAssignTherapist, type TherapistCandidate } from "./auto-assign";
 import { getStore, nextReservationId, ROOMS, THERAPISTS, type Gender, type Reservation } from "./mock-data";
+import { sendSlackMessage } from "@/lib/notifications/slack";
 
 /** Post-treatment cleanup buffer: nobody else may book this therapist/room for this long after. */
 const CLEANUP_BUFFER_MINUTES = 15;
@@ -215,6 +217,11 @@ export async function createReservation(input: {
   };
   store.reservations.push(reservation);
 
+  sendSlackMessage(
+    `📅 予約が入りました：${session.name} さん ${input.date} ${formatTimeLabel(input.startMinutes)}〜` +
+      `（${therapist.name}・${input.durationMinutes}分）`
+  );
+
   return { ok: true, reservationId: reservation.id };
 }
 
@@ -228,11 +235,17 @@ export async function cancelReservation(
   if (index === -1) {
     return { ok: false, error: "予約が見つかりません。" };
   }
-  if (store.reservations[index].userEmployeeId !== session.employeeId) {
+  const cancelled = store.reservations[index];
+  if (cancelled.userEmployeeId !== session.employeeId) {
     return { ok: false, error: "この予約をキャンセルする権限がありません。" };
   }
 
   store.reservations.splice(index, 1);
+
+  sendSlackMessage(
+    `🗑️ 予約がキャンセルされました：${session.name} さん ${cancelled.date} ${formatTimeLabel(cancelled.startMinutes)}〜`
+  );
+
   return { ok: true };
 }
 
