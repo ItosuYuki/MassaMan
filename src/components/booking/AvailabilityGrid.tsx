@@ -21,8 +21,12 @@ const STATUS_LABEL: Record<string, string> = {
 
 const DISABLED_STATUSES = new Set(["unavailable", "tooLate"]);
 
-function slotClasses(status: string, isSelected: boolean) {
-  if (isSelected) return "bg-accent-soft border border-accent text-accent-strong font-bold";
+function slotClasses(status: string, isSelected: boolean, withBorder = true) {
+  if (isSelected) {
+    return withBorder
+      ? "bg-accent-soft border border-accent text-accent-strong font-bold"
+      : "bg-accent-soft text-accent-strong font-bold";
+  }
   if (status === "reserved") return "bg-role-user-soft text-role-user";
   if (status === "unavailable" || status === "tooLate") return "bg-surface-2 text-ink-faint";
   return "bg-surface text-ink";
@@ -40,6 +44,11 @@ export function AvailabilityGrid(props: {
   // PC grid highlights one 15-min row per ~15 minutes of the chosen treatment time
   // (5-15min -> 1 row, 20-30min -> 2 rows, 35-45min -> 3 rows), starting at the picked slot.
   const highlightRowCount = Math.ceil(durationMinutes / 15);
+  const selectedDayIndex = days.findIndex((d) => d.date === selectedDate);
+  const selectedTickIndex =
+    selectedStartMinutes !== null
+      ? (days[selectedDayIndex]?.slots.findIndex((s) => s.startMinutes === selectedStartMinutes) ?? -1)
+      : -1;
 
   return (
     <div>
@@ -81,7 +90,17 @@ export function AvailabilityGrid(props: {
       </div>
 
       {/* Desktop: full week grid */}
-      <div className="hidden sm:grid sm:grid-cols-[56px_repeat(5,1fr)] sm:gap-1">
+      <div className="relative hidden sm:grid sm:grid-cols-[56px_repeat(5,1fr)] sm:gap-1">
+        {selectedTickIndex !== -1 && (
+          <div
+            className="pointer-events-none absolute inset-0 rounded-md border-2 border-accent-strong bg-accent-soft"
+            style={{
+              gridColumn: selectedDayIndex + 2,
+              gridRowStart: selectedTickIndex + 2,
+              gridRowEnd: selectedTickIndex + 2 + highlightRowCount,
+            }}
+          />
+        )}
         <div />
         {days.map((day) => (
           <div key={day.date} className="mono text-center text-[11px] text-ink-soft">
@@ -107,7 +126,8 @@ export function AvailabilityGrid(props: {
                   onClick={() => onSelectSlot(day.date, slot.startMinutes)}
                   className={`mono rounded-md py-1 text-[11px] ${slotClasses(
                     slot.status,
-                    isSelected
+                    isSelected,
+                    false
                   )} disabled:cursor-not-allowed`}
                 >
                   {STATUS_SYMBOL[slot.status]}

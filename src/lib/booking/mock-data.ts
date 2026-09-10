@@ -96,7 +96,8 @@ function seedReservations(): Reservation[] {
       autoAssigned: false,
       createdAt: Date.now(),
     },
-    // A past treatment so the mypage history/review feature has something to show on first load.
+    // Past treatments so the mypage history/review feature has something to show on first load
+    // (one already reviewed, one not, to demo both states).
     {
       id: "seed-3",
       userEmployeeId: "E1001",
@@ -108,6 +109,19 @@ function seedReservations(): Reservation[] {
       durationMinutes: 30,
       note: "",
       autoAssigned: true,
+      createdAt: Date.now(),
+    },
+    {
+      id: "seed-4",
+      userEmployeeId: "E1001",
+      userName: "佐々木 美咲",
+      therapistId: "T2004",
+      roomId: "room-2",
+      date: iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7)),
+      startMinutes: 11 * 60,
+      durationMinutes: 45,
+      note: "肩と首の張りが強いです",
+      autoAssigned: false,
       createdAt: Date.now(),
     },
   ];

@@ -24,7 +24,7 @@ export default async function MyPage() {
   return (
     <main className="min-h-dvh bg-bg">
       <header className="flex items-center justify-between border-b border-border bg-surface px-5 py-4 sm:px-8">
-        <PageHeaderBrand title="マイページ" />
+        <PageHeaderBrand />
         <HeaderMenu />
       </header>
 

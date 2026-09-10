@@ -10,7 +10,7 @@ export default async function BookingPage() {
   return (
     <main className="min-h-dvh bg-bg">
       <header className="flex items-center justify-between border-b border-border bg-surface px-5 py-4 sm:px-8">
-        <PageHeaderBrand title="予約" />
+        <PageHeaderBrand />
         <HeaderMenu />
       </header>
       <Suspense>
