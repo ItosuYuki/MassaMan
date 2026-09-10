@@ -56,7 +56,7 @@ export default async function TherapistDashboardPage({
   const { therapistId } = await routeParams;
   const sp = await searchParams;
 
-  const therapists = listTherapists();
+  const therapists = await listTherapists();
   if (!therapists.some((t) => t.therapistId === therapistId)) {
     notFound();
   }
@@ -71,22 +71,23 @@ export default async function TherapistDashboardPage({
 
   const range = rangeForPeriod(period, refDate);
   const previousRange = previousRangeForPeriod(period, refDate);
-  const summary = getTherapistSummary(therapistId, range, filters);
-  const trend = lineValues.length === 0 ? getUtilizationTrend(period, range, previousRange, filters, therapistId) : null;
+  const summary = await getTherapistSummary(therapistId, range, filters);
+  const trend =
+    lineValues.length === 0 ? await getUtilizationTrend(period, range, previousRange, filters, therapistId) : null;
   const attributeKeys = lineValues.filter((v) => v !== OVERALL_ATTRIBUTE_VALUE);
   const trendByAttribute =
     lineValues.length > 0
       ? [
           ...(lineValues.includes(OVERALL_ATTRIBUTE_VALUE)
-            ? [overallAttributeSeries(getUtilizationTrend(period, range, previousRange, filters, therapistId))]
+            ? [overallAttributeSeries(await getUtilizationTrend(period, range, previousRange, filters, therapistId))]
             : []),
           ...(attributeKeys.length > 0
-            ? getUtilizationTrendByAttribute(period, range, lineAttr, filters, therapistId, attributeKeys)
+            ? await getUtilizationTrendByAttribute(period, range, lineAttr, filters, therapistId, attributeKeys)
             : []),
         ]
       : [];
-  const vacancy = getVacancyTrend(period, range, therapistId);
-  const attributeBuckets = getClientAttributeShare(range, attribute, therapistId);
+  const vacancy = await getVacancyTrend(period, range, therapistId);
+  const attributeBuckets = await getClientAttributeShare(range, attribute, therapistId);
 
   const params = { period: sp.period, ref: sp.ref, compare: sp.compare, age: sp.age, gender: sp.gender, dept: sp.dept, attr: sp.attr, lineAttr: sp.lineAttr, lineValues: sp.lineValues };
   const basePath = `/dashboard/${therapistId}`;

@@ -18,7 +18,7 @@ import {
   OVERALL_ATTRIBUTE_VALUE,
   type AttributeKind,
 } from "@/lib/dashboard-data";
-import { db } from "@/lib/db";
+import { sql } from "@/lib/db";
 import { DashboardShell, AttributeTabs } from "@/components/dashboard/dashboard-shell";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { UtilizationTrendChart, AttributeTrendChart, VacancyChart, TherapistBarList, AttributeBarList } from "@/components/dashboard/charts";
@@ -78,30 +78,28 @@ export default async function AdminDashboardPage({
   const range = rangeForPeriod(period, refDate);
   const previousRange = previousRangeForPeriod(period, refDate);
 
-  const stats = getOverallStats(range, filters);
-  const previousStats = compare ? getOverallStats(previousRange, filters) : null;
-  const trend = lineValues.length === 0 ? getUtilizationTrend(period, range, previousRange, filters) : null;
+  const stats = await getOverallStats(range, filters);
+  const previousStats = compare ? await getOverallStats(previousRange, filters) : null;
+  const trend = lineValues.length === 0 ? await getUtilizationTrend(period, range, previousRange, filters) : null;
   const attributeKeys = lineValues.filter((v) => v !== OVERALL_ATTRIBUTE_VALUE);
   const trendByAttribute =
     lineValues.length > 0
       ? [
           ...(lineValues.includes(OVERALL_ATTRIBUTE_VALUE)
-            ? [overallAttributeSeries(getUtilizationTrend(period, range, previousRange, filters))]
+            ? [overallAttributeSeries(await getUtilizationTrend(period, range, previousRange, filters))]
             : []),
           ...(attributeKeys.length > 0
-            ? getUtilizationTrendByAttribute(period, range, lineAttr, filters, undefined, attributeKeys)
+            ? await getUtilizationTrendByAttribute(period, range, lineAttr, filters, undefined, attributeKeys)
             : []),
         ]
       : [];
-  const vacancy = getVacancyTrend(period, range);
-  const therapists = getTherapistUtilization(range, filters);
-  const attributeBuckets = getAttributeUtilization(range, attribute, filters);
+  const vacancy = await getVacancyTrend(period, range);
+  const therapists = await getTherapistUtilization(range, filters);
+  const attributeBuckets = await getAttributeUtilization(range, attribute, filters);
 
-  const roster = db
-    .prepare(
-      `SELECT u.gender FROM therapist_profiles tp JOIN users u ON u.id = tp.user_id WHERE tp.is_active = 1`
-    )
-    .all() as { gender: string }[];
+  const roster = await sql<{ gender: string }[]>`
+    SELECT u.gender FROM therapist_profiles tp JOIN users u ON u.id = tp.user_id WHERE tp.is_active = true
+  `;
   const maleCount = roster.filter((r) => r.gender === "male").length;
   const femaleCount = roster.filter((r) => r.gender === "female").length;
 
