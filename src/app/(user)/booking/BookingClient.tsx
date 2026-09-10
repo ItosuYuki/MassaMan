@@ -238,6 +238,7 @@ export function BookingClient() {
           days={days}
           selectedDate={selectedDate}
           selectedStartMinutes={selectedStartMinutes}
+          durationMinutes={durationMinutes}
           onSelectSlot={handleSelectSlot}
         />
       </div>

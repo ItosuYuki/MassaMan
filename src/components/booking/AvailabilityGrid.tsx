@@ -32,10 +32,14 @@ export function AvailabilityGrid(props: {
   days: AvailabilityDay[];
   selectedDate: string;
   selectedStartMinutes: number | null;
+  durationMinutes: number;
   onSelectSlot: (date: string, startMinutes: number) => void;
 }) {
-  const { days, selectedDate, selectedStartMinutes, onSelectSlot } = props;
+  const { days, selectedDate, selectedStartMinutes, durationMinutes, onSelectSlot } = props;
   const selectedDay = days.find((d) => d.date === selectedDate);
+  // PC grid highlights one 15-min row per ~15 minutes of the chosen treatment time
+  // (5-15min -> 1 row, 20-30min -> 2 rows, 35-45min -> 3 rows), starting at the picked slot.
+  const highlightRowCount = Math.ceil(durationMinutes / 15);
 
   return (
     <div>
@@ -91,7 +95,11 @@ export function AvailabilityGrid(props: {
             </div>
             {days.map((day) => {
               const slot = day.slots[tickIndex];
-              const isSelected = selectedDate === day.date && selectedStartMinutes === slot.startMinutes;
+              const isSelected =
+                selectedDate === day.date &&
+                selectedStartMinutes !== null &&
+                slot.startMinutes >= selectedStartMinutes &&
+                slot.startMinutes < selectedStartMinutes + highlightRowCount * 15;
               return (
                 <button
                   key={`${day.date}-${slot.startMinutes}`}
