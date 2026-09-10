@@ -10,7 +10,6 @@ import { NoteField } from "@/components/booking/NoteField";
 import { ConfirmBar } from "@/components/booking/ConfirmBar";
 import { ConfirmDialog } from "@/components/booking/ConfirmDialog";
 import { CancelDialog } from "@/components/booking/CancelDialog";
-import { DressCodeNotice } from "@/components/booking/DressCodeNotice";
 import {
   getWeekDates,
   formatIsoDate,
@@ -264,7 +263,6 @@ export function BookingClient() {
           <DurationControl durationMinutes={durationMinutes} onChange={setDurationMinutes} slotSelected={selectedStartMinutes !== null} />
         </div>
         <NoteField note={note} onChange={setNote} />
-        <DressCodeNotice />
         {userHasReservationThisWeek && (
           <p className="text-xs text-destructive">
             1週間に1回までしか予約できません。次回は{nextAvailableDateLabel}から予約できます。
