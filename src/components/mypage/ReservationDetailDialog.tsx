@@ -18,14 +18,14 @@ export function ReservationDetailDialog({
       <p className="mono mb-1 text-lg font-bold text-accent-strong">
         {formatDateWithWeekday(reservation.date)} {formatTimeLabel(reservation.startMinutes)}〜
       </p>
-      <p className="mb-5 text-xs text-ink-faint">施術時間 {reservation.durationMinutes}分</p>
-      <div className="flex flex-col gap-2.5">
-        <Link
-          href={`/booking?date=${reservation.date}`}
-          className="flex h-11 w-full items-center justify-center rounded-xl border border-accent text-sm font-medium text-accent-strong"
-        >
-          予約を編集
-        </Link>
+      <p className="mb-1 text-xs text-ink-faint">施術時間 {reservation.durationMinutes}分</p>
+      {reservation.note && (
+        <div className="mb-5">
+          <p className="mb-1 text-xs text-ink-faint">施術してほしい部位・伝えたいこと（任意）</p>
+          <p className="whitespace-pre-wrap text-sm text-ink-soft">{reservation.note}</p>
+        </div>
+      )}
+      <div className={`flex flex-col gap-2.5 ${reservation.note ? "" : "mt-5"}`}>
         {/* Lands on the booking page's own slot and opens its cancel-confirmation dialog directly. */}
         <Link
           href={`/booking?date=${reservation.date}&startMinutes=${reservation.startMinutes}`}

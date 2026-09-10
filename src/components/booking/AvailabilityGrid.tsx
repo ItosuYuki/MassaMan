@@ -61,15 +61,16 @@ export function AvailabilityGrid(props: {
               key={slot.startMinutes}
               disabled={DISABLED_STATUSES.has(slot.status)}
               onClick={() => onSelectSlot(selectedDay.date, slot.startMinutes)}
-              className={`flex items-center justify-between rounded-xl px-3.5 py-3 ${slotClasses(
+              className={`grid grid-cols-[1fr_auto_1fr] items-center rounded-xl px-3.5 py-3 ${slotClasses(
                 slot.status,
                 isSelected
               )} disabled:cursor-not-allowed`}
             >
-              <span className="mono text-sm">{formatTimeLabel(slot.startMinutes)}</span>
-              <span className="text-[11px]">
+              <span className="mono justify-self-start text-sm">{formatTimeLabel(slot.startMinutes)}</span>
+              <span className="justify-self-center text-[11px]">
                 {STATUS_SYMBOL[slot.status]} {STATUS_LABEL[slot.status]}
               </span>
+              <span />
             </button>
           );
         })}

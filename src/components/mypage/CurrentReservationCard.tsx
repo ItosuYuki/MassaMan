@@ -5,7 +5,13 @@ import { formatDateWithWeekday, formatTimeLabel } from "@/lib/booking/schedule";
 import type { MyReservation } from "@/lib/booking/actions";
 import { ReservationDetailDialog } from "./ReservationDetailDialog";
 
-export function CurrentReservationCard({ reservations }: { reservations: MyReservation[] }) {
+export function CurrentReservationCard({
+  reservations,
+  children,
+}: {
+  reservations: MyReservation[];
+  children?: React.ReactNode;
+}) {
   const [selected, setSelected] = useState<MyReservation | null>(null);
 
   return (
@@ -29,6 +35,8 @@ export function CurrentReservationCard({ reservations }: { reservations: MyReser
           ))}
         </div>
       )}
+
+      {children && <div className="mt-4 border-t border-border pt-4">{children}</div>}
 
       {selected && <ReservationDetailDialog reservation={selected} onClose={() => setSelected(null)} />}
     </div>

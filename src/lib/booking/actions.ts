@@ -254,6 +254,7 @@ export type MyReservation = {
   date: string;
   startMinutes: number;
   durationMinutes: number;
+  note: string;
 };
 
 /**
@@ -270,32 +271,67 @@ export async function getMyReservations(limit = 5): Promise<MyReservation[]> {
     .filter((r) => r.userEmployeeId === session.employeeId && !isSlotInPast(r.date, r.startMinutes, now))
     .sort((a, b) => (a.date === b.date ? a.startMinutes - b.startMinutes : a.date < b.date ? -1 : 1))
     .slice(0, limit)
-    .map(({ id, date, startMinutes, durationMinutes }) => ({ id, date, startMinutes, durationMinutes }));
+    .map(({ id, date, startMinutes, durationMinutes, note }) => ({ id, date, startMinutes, durationMinutes, note }));
 }
 
-/** Up to `limit` still-open start times today, from now onward — for the mypage recommendation card. */
-export async function getTodaysOpenSlots(limit = 2): Promise<number[]> {
+/** The current user's past reservations, most recent first, for the mypage treatment history. */
+export async function getMyReservationHistory(limit = 5): Promise<MyReservation[]> {
+  const session = await requireRole("user");
+  const { reservations } = getStore();
+  const now = new Date();
+
+  return reservations
+    .filter((r) => r.userEmployeeId === session.employeeId && isSlotInPast(r.date, r.startMinutes, now))
+    .sort((a, b) => (a.date === b.date ? b.startMinutes - a.startMinutes : a.date < b.date ? 1 : -1))
+    .slice(0, limit)
+    .map(({ id, date, startMinutes, durationMinutes, note }) => ({ id, date, startMinutes, durationMinutes, note }));
+}
+
+export type OpenSlot = { date: string; startMinutes: number };
+
+/**
+ * Up to `limit` still-open start times from now onward, checked against real
+ * reservation data (room capacity, past-time, closing-time) exactly like the main
+ * availability grid — searched across the next 10 business days (today included) so
+ * it still finds something to suggest even late in the day, for the mypage
+ * recommendation card. Each result carries its own date since it may not be today.
+ */
+export async function getUpcomingOpenSlots(limit = 2): Promise<OpenSlot[]> {
   await requireRole("user");
   const totalRooms = ROOMS.length;
   const { reservations } = getStore();
   const now = new Date();
-  const todayIso = formatIsoDate(now);
   const suggestionDuration = 30;
 
-  const dayReservations = reservations.filter((r) => r.date === todayIso);
-  const open: number[] = [];
+  const candidateDates: Date[] = [];
+  for (let offset = 0, scanned = 0; scanned < 10 && offset < 30; offset++) {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + offset);
+    if (BUSINESS_DAYS.includes(d.getDay() as (typeof BUSINESS_DAYS)[number])) {
+      candidateDates.push(d);
+      scanned++;
+    }
+  }
 
-  for (const tick of getTimeSlots()) {
+  const open: OpenSlot[] = [];
+  for (const date of candidateDates) {
     if (open.length >= limit) break;
-    const coveringTick = dayReservations.filter((r) => reservationCoversTick(r, tick));
-    const status = computeSlotStatus({
-      totalRooms,
-      bookedRoomCount: new Set(coveringTick.map((r) => r.roomId)).size,
-      isOwnReservation: false,
-      isPast: isSlotInPast(todayIso, tick, now),
-      wouldExceedClosing: tick + suggestionDuration > CLOSING_TIME_MINUTES,
-    });
-    if (status === "available") open.push(tick);
+    const dateIso = formatIsoDate(date);
+    const dayReservations = reservations.filter((r) => r.date === dateIso);
+
+    for (const tick of getTimeSlots()) {
+      if (open.length >= limit) break;
+      const coveringTick = dayReservations.filter((r) => reservationCoversTick(r, tick));
+      const status = computeSlotStatus({
+        totalRooms,
+        bookedRoomCount: new Set(coveringTick.map((r) => r.roomId)).size,
+        isOwnReservation: false,
+        isPast: isSlotInPast(dateIso, tick, now),
+        wouldExceedClosing: tick + suggestionDuration > CLOSING_TIME_MINUTES,
+      });
+      if (status === "available") open.push({ date: dateIso, startMinutes: tick });
+    }
   }
 
   return open;

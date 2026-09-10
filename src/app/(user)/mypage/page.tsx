@@ -5,13 +5,19 @@ import { LogoBadge } from "@/components/mypage/LogoBadge";
 import { FirstTimeGuide } from "@/components/mypage/FirstTimeGuide";
 import { CurrentReservationCard } from "@/components/mypage/CurrentReservationCard";
 import { RecommendationCard } from "@/components/mypage/RecommendationCard";
-import { getMyReservations, getTodaysOpenSlots } from "@/lib/booking/actions";
+import { NotificationSettingsCard } from "@/components/mypage/NotificationSettingsCard";
+import { TreatmentHistoryCard } from "@/components/mypage/TreatmentHistoryCard";
+import { getMyReservations, getMyReservationHistory, getUpcomingOpenSlots } from "@/lib/booking/actions";
 import { getGreeting } from "@/lib/mypage/greeting";
 
 export default async function MyPage() {
   await requireRole("user");
 
-  const [reservations, openSlots] = await Promise.all([getMyReservations(5), getTodaysOpenSlots(2)]);
+  const [reservations, history, openSlots] = await Promise.all([
+    getMyReservations(5),
+    getMyReservationHistory(5),
+    getUpcomingOpenSlots(2),
+  ]);
   const greeting = getGreeting(new Date());
   const hasReservation = reservations.length > 0;
 
@@ -27,9 +33,10 @@ export default async function MyPage() {
 
       <FirstTimeGuide />
 
-      <div className="mx-auto flex max-w-md flex-col gap-5 p-5 sm:p-8">
-        <CurrentReservationCard reservations={reservations} />
-        {!hasReservation && <RecommendationCard greeting={greeting} openSlots={openSlots} />}
+      <div className="mx-auto flex max-w-md flex-col gap-5 p-5 sm:max-w-2xl sm:p-8">
+        <CurrentReservationCard reservations={reservations}>
+          {!hasReservation && <RecommendationCard greeting={greeting} openSlots={openSlots} />}
+        </CurrentReservationCard>
 
         <Link
           href="/booking"
@@ -37,6 +44,11 @@ export default async function MyPage() {
         >
           予約を追加
         </Link>
+
+        <div className="flex flex-col gap-5 sm:grid sm:grid-cols-2">
+          <NotificationSettingsCard />
+          <TreatmentHistoryCard history={history} />
+        </div>
       </div>
     </main>
   );
