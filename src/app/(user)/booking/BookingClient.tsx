@@ -89,6 +89,19 @@ export function BookingClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekDates, durationMinutes]);
 
+  // A duration change can push the currently selected start time past closing time
+  // (e.g. 19:15 fits a 20-min treatment but not a 45-min one) — deselect it when that happens.
+  useEffect(() => {
+    if (selectedStartMinutes === null) return;
+    const day = days.find((d) => d.date === selectedDate);
+    const slot = day?.slots.find((s) => s.startMinutes === selectedStartMinutes);
+    if (!slot || slot.status === "unavailable" || slot.status === "tooLate") {
+      const timer = setTimeout(() => setSelectedStartMinutes(null), 0);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days]);
+
   useEffect(() => {
     if (selectedStartMinutes === null) {
       return;
@@ -207,7 +220,9 @@ export function BookingClient() {
   }
 
   const confirmTimeLabel = selectedStartMinutes !== null ? `${formatTimeLabel(selectedStartMinutes)}〜` : "";
-  const nextAvailableDate = new Date(currentWeekMonday);
+  // The Monday after whichever week is currently blocked — not always "today's week + 7",
+  // since the blocked week being viewed may already be a future one.
+  const nextAvailableDate = new Date(weekDates[0]);
   nextAvailableDate.setDate(nextAvailableDate.getDate() + 7);
   const nextAvailableDateLabel = formatDateWithWeekday(formatIsoDate(nextAvailableDate));
 
