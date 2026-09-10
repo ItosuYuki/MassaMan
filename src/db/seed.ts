@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { notLike } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import * as schema from "./schema";
-import { departments, users, therapistProfiles, rooms, therapistShifts, reservations } from "./schema";
+import { departments, users, therapistProfiles, rooms, therapistShifts, reservations, reviews } from "./schema";
 import { isNonWorkingDay } from "../lib/holidays";
 
 const pgClient = postgres(process.env.DATABASE_URL!);
@@ -171,6 +171,11 @@ async function insertReservationsInChunks(rows: (typeof reservations.$inferInser
     await db.insert(reservations).values(rows.slice(i, i + chunkSize));
   }
 }
+async function insertReviewsInChunks(rows: (typeof reviews.$inferInsert)[], chunkSize = 500) {
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    await db.insert(reviews).values(rows.slice(i, i + chunkSize));
+  }
+}
 
 async function build() {
   console.log("Truncating existing tables...");
@@ -335,10 +340,36 @@ async function build() {
   console.log(`Inserting ${reservationRows.length} reservations...`);
   await insertReservationsInChunks(reservationRows);
 
+  // A small deterministic review set keeps the admin management screen useful
+  // immediately after seeding while preserving the same anonymous data shape
+  // as production reviews (the management query exposes departments only).
+  const reviewComments = [
+    "肩と首の張りが楽になりました。的確に凝りをほぐしてくれます。",
+    "丁寧な施術で安心できました。時間通りに終わるのも良いです。",
+    "腰の重さが改善しました。次回もぜひお願いしたいです。",
+    "力加減を確認しながら進めてくれて、とてもリラックスできました。",
+  ];
+  const reviewCountByTherapist = new Map<string, number>();
+  const reviewRows: (typeof reviews.$inferInsert)[] = [];
+  for (const reservation of reservationRows) {
+    if (reservation.status !== "completed") continue;
+    const count = reviewCountByTherapist.get(reservation.therapistId) ?? 0;
+    if (count >= 12) continue;
+    reviewCountByTherapist.set(reservation.therapistId, count + 1);
+    reviewRows.push({
+      id: crypto.randomUUID(),
+      reservationId: reservation.id!,
+      rating: [5, 4, 5, 5, 4][reviewRows.length % 5],
+      comment: reviewComments[reviewRows.length % reviewComments.length],
+    });
+  }
+  console.log(`Inserting ${reviewRows.length} reviews...`);
+  await insertReviewsInChunks(reviewRows);
+
   console.log(
     `Seeded: ${DEPARTMENTS.length} departments, ${namedUserRows.length + syntheticUserRows.length} users ` +
       `(${syntheticUserRows.length} synthetic), ${ROOMS.length} rooms, ${shiftRows.length} shifts, ` +
-      `${reservationRows.length} reservations (${toISODate(startDate)} to ${toISODate(endDate)}).`
+      `${reservationRows.length} reservations, ${reviewRows.length} reviews (${toISODate(startDate)} to ${toISODate(endDate)}).`
   );
 }
 
