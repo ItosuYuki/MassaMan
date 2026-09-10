@@ -187,9 +187,49 @@ CREATE TABLE notification_settings (
   channel         notification_channel NOT NULL,
   enabled         boolean NOT NULL DEFAULT true,
   minutes_before  int NOT NULL, -- 既定値：利用者30分／マッサージ師10分
-  slack_user_id   text
+  slack_user_id   text,
+  reservation_created_enabled boolean NOT NULL DEFAULT true,
+  reservation_cancelled_enabled boolean NOT NULL DEFAULT true,
+  reminder_enabled boolean NOT NULL DEFAULT true
 );
 
 CREATE INDEX idx_notification_settings_user_id ON notification_settings(user_id);
+CREATE UNIQUE INDEX notification_settings_user_channel_key ON notification_settings(user_id, channel);
+
+-- ---------------------------------------------------------------------------
+-- notification_deliveries (通知配信履歴)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE notification_deliveries (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         uuid NOT NULL REFERENCES users(id),
+  reservation_id  uuid REFERENCES reservations(id),
+  channel         notification_channel NOT NULL,
+  event_type      text NOT NULL,
+  title           text NOT NULL,
+  body            text NOT NULL,
+  sent_at         timestamptz,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_notification_deliveries_user_created
+  ON notification_deliveries(user_id, created_at);
+CREATE INDEX idx_notification_deliveries_reservation
+  ON notification_deliveries(reservation_id);
+
+-- ---------------------------------------------------------------------------
+-- slack_connections (Slack OAuth連携)
+-- ---------------------------------------------------------------------------
+
+CREATE TABLE slack_connections (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id         uuid NOT NULL UNIQUE REFERENCES users(id),
+  slack_team_id   text NOT NULL,
+  slack_user_id   text NOT NULL,
+  connected_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_slack_connections_team_user
+  ON slack_connections(slack_team_id, slack_user_id);
 
 COMMIT;

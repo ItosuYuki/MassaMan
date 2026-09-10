@@ -38,7 +38,7 @@ export function AccountMenu({
       </button>
 
       {open && (
-        <div role="menu" className={`absolute right-0 z-10 w-48 rounded-xl border border-border bg-surface p-1.5 shadow-lg ${menuPlacement === "up" ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"}`}>
+        <div role="menu" className={`absolute right-0 z-10 w-48 rounded-xl border border-border bg-surface p-1.5 ${menuPlacement === "up" ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"}`}>
           <Link href="/notifications" role="menuitem" onClick={() => setOpen(false)} className="block rounded-lg px-3 py-2.5 text-sm text-ink-soft hover:bg-bg">
             通知設定
           </Link>

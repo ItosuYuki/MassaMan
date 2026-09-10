@@ -43,7 +43,7 @@ export function NotificationSettingsCard({ role, settings }: { role: "user" | "t
         <div>
           <div className="text-[13px]">通知</div>
           <div className="mt-0.5 text-[11px] text-ink-faint">
-            {isUser ? "アプリ内通知 + メール" : `Slack通知（${"#massage-room"}）`}
+            {isUser ? "アプリ内通知 + メール" : "Slack個人DM"}
           </div>
         </div>
         <label className="relative inline-flex h-[22px] w-[38px] shrink-0 cursor-pointer items-center">

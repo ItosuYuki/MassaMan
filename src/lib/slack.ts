@@ -71,7 +71,7 @@ export async function postSlackDm(slackUserId: string, text: string, blocks?: un
   if (!token) throw new Error("SLACK_BOT_TOKEN is not set");
   const response = await fetch(`${SLACK_API}/chat.postMessage`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+    headers: { Authorization: `Bearer ${token}`, "content-type": "application/json; charset=utf-8" },
     body: JSON.stringify({ channel: slackUserId, text, ...(blocks ? { blocks } : {}) }),
     cache: "no-store",
   });

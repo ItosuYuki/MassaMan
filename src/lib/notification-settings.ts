@@ -7,7 +7,6 @@ import type { Role } from "@/lib/session";
 
 export const USER_DEFAULT_MINUTES = 30;
 export const THERAPIST_DEFAULT_MINUTES = 10;
-export const THERAPIST_SLACK_CHANNEL = "#massage-room";
 
 export type NotificationCardSettings = {
   enabled: boolean;
