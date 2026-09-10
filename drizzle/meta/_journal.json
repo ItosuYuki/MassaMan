@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1789007685255,
+      "tag": "0000_lonely_puppet_master",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789010000000,
+      "tag": "0001_dashboard_data_cleanup",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789030000000,
+      "tag": "0002_notification_deliveries",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789040000000,
+      "tag": "0003_slack_connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789040000001,
+      "tag": "0004_confused_lilandra",
+      "breakpoints": true
+    }
+  ]
+}
