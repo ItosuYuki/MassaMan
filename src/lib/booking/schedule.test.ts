@@ -1,17 +1,37 @@
 import { describe, expect, it } from "vitest";
-import { BUSINESS_DAYS, BUSINESS_HOURS, getHourSlots, getWeekDates, formatIsoDate, isSlotInPast } from "./schedule";
+import {
+  BUSINESS_DAYS,
+  BUSINESS_HOURS,
+  SLOT_STEP_MINUTES,
+  getTimeSlots,
+  formatTimeLabel,
+  getWeekDates,
+  formatIsoDate,
+  isSlotInPast,
+} from "./schedule";
 
 describe("schedule", () => {
   it("BUSINESS_DAYS is Monday through Friday", () => {
     expect(BUSINESS_DAYS).toEqual([1, 2, 3, 4, 5]);
   });
 
-  it("getHourSlots returns 9 through 19 inclusive (no 20:00 slot)", () => {
-    expect(getHourSlots()).toEqual([9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
-  });
-
   it("BUSINESS_HOURS ends at 19", () => {
     expect(BUSINESS_HOURS.end).toBe(19);
+  });
+
+  it("getTimeSlots returns every 15 minutes from 9:00 through 19:00 inclusive", () => {
+    const slots = getTimeSlots();
+    expect(slots[0]).toBe(9 * 60);
+    expect(slots[slots.length - 1]).toBe(19 * 60);
+    expect(slots.length).toBe((19 - 9) * 4 + 1);
+    expect(SLOT_STEP_MINUTES).toBe(15);
+  });
+
+  it("formatTimeLabel formats minutes-from-midnight as H:MM", () => {
+    expect(formatTimeLabel(9 * 60)).toBe("9:00");
+    expect(formatTimeLabel(9 * 60 + 15)).toBe("9:15");
+    expect(formatTimeLabel(9 * 60 + 45)).toBe("9:45");
+    expect(formatTimeLabel(19 * 60)).toBe("19:00");
   });
 
   it("getWeekDates returns the Mon-Fri dates of the week containing a Wednesday anchor", () => {
@@ -46,24 +66,32 @@ describe("schedule", () => {
     const now = new Date("2026-09-09T14:30:00");
 
     it("is false for a slot later today", () => {
-      expect(isSlotInPast("2026-09-09", 15, now)).toBe(false);
+      expect(isSlotInPast("2026-09-09", 15 * 60, now)).toBe(false);
     });
 
     it("is true for a slot earlier today, even mid-hour", () => {
-      expect(isSlotInPast("2026-09-09", 14, now)).toBe(true);
+      expect(isSlotInPast("2026-09-09", 14 * 60, now)).toBe(true);
     });
 
-    it("is true for the exact current hour (the slot has already started)", () => {
-      const onTheHour = new Date("2026-09-09T14:00:00");
-      expect(isSlotInPast("2026-09-09", 14, onTheHour)).toBe(true);
+    it("is true for a slot 15 minutes ago", () => {
+      expect(isSlotInPast("2026-09-09", 14 * 60 + 15, now)).toBe(true);
+    });
+
+    it("is false for a slot 15 minutes from now", () => {
+      expect(isSlotInPast("2026-09-09", 14 * 60 + 45, now)).toBe(false);
+    });
+
+    it("is true for the exact current minute (the slot has already started)", () => {
+      const onTheDot = new Date("2026-09-09T14:00:00");
+      expect(isSlotInPast("2026-09-09", 14 * 60, onTheDot)).toBe(true);
     });
 
     it("is true for any slot on a past date", () => {
-      expect(isSlotInPast("2026-09-08", 18, now)).toBe(true);
+      expect(isSlotInPast("2026-09-08", 18 * 60, now)).toBe(true);
     });
 
     it("is false for any slot on a future date", () => {
-      expect(isSlotInPast("2026-09-10", 9, now)).toBe(false);
+      expect(isSlotInPast("2026-09-10", 9 * 60, now)).toBe(false);
     });
   });
 });

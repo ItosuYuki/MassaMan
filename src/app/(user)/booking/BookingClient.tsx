@@ -7,11 +7,16 @@ import { TherapistPanel, type TherapistMode } from "@/components/booking/Therapi
 import { DurationControl } from "@/components/booking/DurationControl";
 import { NoteField } from "@/components/booking/NoteField";
 import { ConfirmBar } from "@/components/booking/ConfirmBar";
-import { getWeekDates, formatIsoDate } from "@/lib/booking/schedule";
+import { ConfirmDialog } from "@/components/booking/ConfirmDialog";
+import { CancelDialog } from "@/components/booking/CancelDialog";
+import { DressCodeNotice } from "@/components/booking/DressCodeNotice";
+import { getWeekDates, formatIsoDate, formatTimeLabel, isSlotInPast } from "@/lib/booking/schedule";
 import {
   getAvailability,
   getTherapistCandidates,
   createReservation,
+  cancelReservation,
+  getOwnReservationAt,
   type AvailabilityDay,
   type TherapistOption,
 } from "@/lib/booking/actions";
@@ -23,6 +28,10 @@ function genderFilterForMode(mode: TherapistMode): Gender[] {
   return [];
 }
 
+function dateLabel(iso: string): string {
+  return iso.slice(5).replace("-", "/");
+}
+
 export function BookingClient() {
   const today = useMemo(() => new Date(), []);
   const currentWeekMonday = useMemo(() => getWeekDates(today)[0], [today]);
@@ -31,7 +40,7 @@ export function BookingClient() {
   const canGoPrevWeek = weekDates[0] > currentWeekMonday;
 
   const [selectedDate, setSelectedDate] = useState(formatIsoDate(today));
-  const [selectedHour, setSelectedHour] = useState<number | null>(null);
+  const [selectedStartMinutes, setSelectedStartMinutes] = useState<number | null>(null);
   const [days, setDays] = useState<AvailabilityDay[]>([]);
   const [userHasReservationThisWeek, setUserHasReservationThisWeek] = useState(false);
 
@@ -40,33 +49,61 @@ export function BookingClient() {
 
   const [durationMinutes, setDurationMinutes] = useState(45);
   const [note, setNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmStep, setConfirmStep] = useState<"confirm" | "success">("confirm");
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  useEffect(() => {
+  const [cancelTarget, setCancelTarget] = useState<{
+    reservationId: string;
+    date: string;
+    startMinutes: number;
+  } | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [isCancelling, startCancelTransition] = useTransition();
+
+  function refreshAvailability() {
     getAvailability(formatIsoDate(weekDates[0])).then((result) => {
       setDays(result.days);
       setUserHasReservationThisWeek(result.userHasReservationThisWeek);
     });
+  }
+
+  useEffect(() => {
+    refreshAvailability();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekDates]);
 
   useEffect(() => {
-    if (selectedHour === null) {
+    if (selectedStartMinutes === null) {
       return;
     }
-    getTherapistCandidates(selectedDate, selectedHour, genderFilterForMode(mode)).then(setCandidates);
-  }, [selectedDate, selectedHour, mode]);
+    getTherapistCandidates(selectedDate, selectedStartMinutes, durationMinutes, genderFilterForMode(mode)).then(
+      setCandidates
+    );
+  }, [selectedDate, selectedStartMinutes, durationMinutes, mode]);
 
   const assignedTherapistId = candidates.find((c) => c.isAutoRecommended)?.id ?? null;
   const hasEligibleTherapist = candidates.some((c) => c.isAvailable);
 
-  function handleSelectSlot(date: string, hour: number) {
-    if (isSlotInPast(date, hour, new Date())) return;
+  function handleSelectSlot(date: string, startMinutes: number) {
+    if (isSlotInPast(date, startMinutes, new Date())) return;
+
+    const day = days.find((d) => d.date === date);
+    const slot = day?.slots.find((s) => s.startMinutes === startMinutes);
+    if (slot?.status === "reserved") {
+      getOwnReservationAt(date, startMinutes).then((res) => {
+        if (res) {
+          setCancelError(null);
+          setCancelTarget({ reservationId: res.id, date, startMinutes });
+        }
+      });
+      return;
+    }
+
     setSelectedDate(date);
-    setSelectedHour(hour);
-    setError(null);
-    setSuccess(false);
+    setSelectedStartMinutes(startMinutes);
   }
 
   function handleSelectDate(iso: string) {
@@ -75,39 +112,60 @@ export function BookingClient() {
     todayMidnight.setHours(0, 0, 0, 0);
     if (picked < todayMidnight) return;
     setSelectedDate(iso);
-    setError(null);
-    setSuccess(false);
   }
 
-  function handleConfirm() {
-    if (selectedHour === null || !assignedTherapistId) return;
-    setError(null);
-    setSuccess(false);
+  function handleOpenConfirm() {
+    if (selectedStartMinutes === null || !assignedTherapistId) return;
+    setConfirmError(null);
+    setConfirmStep("confirm");
+    setConfirmOpen(true);
+  }
+
+  function handleConfirmReservation() {
+    if (selectedStartMinutes === null || !assignedTherapistId) return;
+    setConfirmError(null);
     startTransition(async () => {
       const result = await createReservation({
         date: selectedDate,
-        startHour: selectedHour,
+        startMinutes: selectedStartMinutes,
         durationMinutes,
         therapistId: assignedTherapistId,
         note: note || undefined,
         autoAssigned: mode === "auto",
       });
       if (!result.ok) {
-        setError(result.error);
+        setConfirmError(result.error);
         return;
       }
-      setSuccess(true);
-      setSelectedHour(null);
-      setCandidates([]);
+      setConfirmStep("success");
       setNote("");
-      getAvailability(formatIsoDate(weekDates[0])).then((result) => {
-        setDays(result.days);
-        setUserHasReservationThisWeek(result.userHasReservationThisWeek);
-      });
+      refreshAvailability();
     });
   }
 
-  const confirmLabel = selectedHour !== null ? `${selectedDate.slice(5).replace("-", "/")} ${selectedHour}:00〜` : "";
+  function handleCloseConfirm() {
+    setConfirmOpen(false);
+    if (confirmStep === "success") {
+      setSelectedStartMinutes(null);
+      setCandidates([]);
+    }
+  }
+
+  function handleConfirmCancel() {
+    if (!cancelTarget) return;
+    setCancelError(null);
+    startCancelTransition(async () => {
+      const result = await cancelReservation(cancelTarget.reservationId);
+      if (!result.ok) {
+        setCancelError(result.error);
+        return;
+      }
+      setCancelTarget(null);
+      refreshAvailability();
+    });
+  }
+
+  const confirmTimeLabel = selectedStartMinutes !== null ? `${formatTimeLabel(selectedStartMinutes)}〜` : "";
 
   return (
     <div className="flex flex-col gap-6 p-5 sm:flex-row sm:items-start sm:gap-0 sm:p-8">
@@ -127,14 +185,14 @@ export function BookingClient() {
             mode={mode}
             onChangeMode={setMode}
             hasEligibleTherapist={hasEligibleTherapist}
-            slotSelected={selectedHour !== null}
+            slotSelected={selectedStartMinutes !== null}
           />
           <DurationControl durationMinutes={durationMinutes} onChange={setDurationMinutes} />
         </div>
         <AvailabilityGrid
           days={days}
           selectedDate={selectedDate}
-          selectedHour={selectedHour}
+          selectedStartMinutes={selectedStartMinutes}
           onSelectSlot={handleSelectSlot}
         />
       </div>
@@ -145,25 +203,46 @@ export function BookingClient() {
             mode={mode}
             onChangeMode={setMode}
             hasEligibleTherapist={hasEligibleTherapist}
-            slotSelected={selectedHour !== null}
+            slotSelected={selectedStartMinutes !== null}
           />
         </div>
         <div className="hidden sm:block">
           <DurationControl durationMinutes={durationMinutes} onChange={setDurationMinutes} />
         </div>
         <NoteField note={note} onChange={setNote} />
-        {userHasReservationThisWeek && !success && (
+        <DressCodeNotice />
+        {userHasReservationThisWeek && (
           <p className="text-xs text-destructive">1週間に1回までしか予約できません。今週はすでに予約があります。</p>
         )}
         <ConfirmBar
-          label={confirmLabel}
-          disabled={selectedHour === null || !assignedTherapistId || userHasReservationThisWeek}
-          pending={isPending}
-          error={error}
-          success={success}
-          onConfirm={handleConfirm}
+          label={confirmTimeLabel}
+          disabled={selectedStartMinutes === null || !assignedTherapistId || userHasReservationThisWeek}
+          onOpen={handleOpenConfirm}
         />
       </div>
+
+      {confirmOpen && (
+        <ConfirmDialog
+          step={confirmStep}
+          dateLabel={dateLabel(selectedDate)}
+          timeLabel={confirmTimeLabel}
+          pending={isPending}
+          error={confirmError}
+          onConfirm={handleConfirmReservation}
+          onClose={handleCloseConfirm}
+        />
+      )}
+
+      {cancelTarget && (
+        <CancelDialog
+          dateLabel={dateLabel(cancelTarget.date)}
+          timeLabel={`${formatTimeLabel(cancelTarget.startMinutes)}〜`}
+          pending={isCancelling}
+          error={cancelError}
+          onConfirm={handleConfirmCancel}
+          onDismiss={() => setCancelTarget(null)}
+        />
+      )}
     </div>
   );
 }

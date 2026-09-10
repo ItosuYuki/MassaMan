@@ -1,16 +1,27 @@
 export const BUSINESS_DAYS = [1, 2, 3, 4, 5] as const; // Mon-Fri (Date.getDay())
 export const BUSINESS_HOURS = { start: 9, end: 19 } as const;
+export const SLOT_STEP_MINUTES = 15;
 
-export function getHourSlots(): number[] {
+/** Minutes-from-midnight for every bookable start time, e.g. 540 (9:00) .. 1140 (19:00), step 15. */
+export function getTimeSlots(): number[] {
+  const startMinutes = BUSINESS_HOURS.start * 60;
+  const endMinutes = BUSINESS_HOURS.end * 60;
   const slots: number[] = [];
-  for (let h = BUSINESS_HOURS.start; h <= BUSINESS_HOURS.end; h++) slots.push(h);
+  for (let m = startMinutes; m <= endMinutes; m += SLOT_STEP_MINUTES) slots.push(m);
   return slots;
 }
 
+/** Formats minutes-from-midnight as "H:MM", e.g. 555 -> "9:15". */
+export function formatTimeLabel(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h}:${String(m).padStart(2, "0")}`;
+}
+
 /** Whether the given business-hour slot has already started (or passed), relative to `now`. */
-export function isSlotInPast(dateIso: string, startHour: number, now: Date): boolean {
+export function isSlotInPast(dateIso: string, startMinutes: number, now: Date): boolean {
   const slotStart = new Date(`${dateIso}T00:00:00`);
-  slotStart.setHours(startHour, 0, 0, 0);
+  slotStart.setMinutes(startMinutes, 0, 0);
   return slotStart <= now;
 }
 

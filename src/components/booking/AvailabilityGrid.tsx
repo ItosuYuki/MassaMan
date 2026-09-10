@@ -1,6 +1,7 @@
 "use client";
 
 import type { AvailabilityDay } from "@/lib/booking/actions";
+import { formatTimeLabel } from "@/lib/booking/schedule";
 
 const STATUS_SYMBOL: Record<string, string> = {
   reserved: "✓",
@@ -24,15 +25,15 @@ function slotClasses(status: string, isSelected: boolean) {
 export function AvailabilityGrid(props: {
   days: AvailabilityDay[];
   selectedDate: string;
-  selectedHour: number | null;
-  onSelectSlot: (date: string, hour: number) => void;
+  selectedStartMinutes: number | null;
+  onSelectSlot: (date: string, startMinutes: number) => void;
 }) {
-  const { days, selectedDate, selectedHour, onSelectSlot } = props;
+  const { days, selectedDate, selectedStartMinutes, onSelectSlot } = props;
   const selectedDay = days.find((d) => d.date === selectedDate);
 
   return (
     <div>
-      <p className="mb-2 text-xs text-ink-faint">空き状況（他の人の予約者名は表示されません）</p>
+      <p className="mb-2 text-xs text-ink-faint">空き状況</p>
       <div className="mb-3 flex items-center gap-4 text-[11px] text-ink-faint">
         <span className="flex items-center gap-1">
           <b className="text-role-user">✓</b>予約済み
@@ -48,18 +49,18 @@ export function AvailabilityGrid(props: {
       {/* Mobile: list for the selected day */}
       <div className="flex flex-col gap-2 sm:hidden">
         {selectedDay?.slots.map((slot) => {
-          const isSelected = selectedHour === slot.hour;
+          const isSelected = selectedStartMinutes === slot.startMinutes;
           return (
             <button
-              key={slot.hour}
+              key={slot.startMinutes}
               disabled={slot.status === "unavailable"}
-              onClick={() => onSelectSlot(selectedDay.date, slot.hour)}
+              onClick={() => onSelectSlot(selectedDay.date, slot.startMinutes)}
               className={`flex items-center justify-between rounded-xl px-3.5 py-3 ${slotClasses(
                 slot.status,
                 isSelected
               )} disabled:cursor-not-allowed`}
             >
-              <span className="mono text-sm">{slot.hour}:00</span>
+              <span className="mono text-sm">{formatTimeLabel(slot.startMinutes)}</span>
               <span className="text-[11px]">
                 {STATUS_SYMBOL[slot.status]} {STATUS_LABEL[slot.status]}
               </span>
@@ -76,19 +77,19 @@ export function AvailabilityGrid(props: {
             {day.date.slice(5).replace("-", "/")}
           </div>
         ))}
-        {days[0]?.slots.map((_, hourIndex) => (
-          <div key={`row-${hourIndex}`} className="contents">
+        {days[0]?.slots.map((_, tickIndex) => (
+          <div key={`row-${tickIndex}`} className="contents">
             <div className="mono flex items-center justify-end pr-2 text-[11px] text-ink-faint">
-              {days[0].slots[hourIndex].hour}:00
+              {formatTimeLabel(days[0].slots[tickIndex].startMinutes)}
             </div>
             {days.map((day) => {
-              const slot = day.slots[hourIndex];
-              const isSelected = selectedDate === day.date && selectedHour === slot.hour;
+              const slot = day.slots[tickIndex];
+              const isSelected = selectedDate === day.date && selectedStartMinutes === slot.startMinutes;
               return (
                 <button
-                  key={`${day.date}-${slot.hour}`}
+                  key={`${day.date}-${slot.startMinutes}`}
                   disabled={slot.status === "unavailable"}
-                  onClick={() => onSelectSlot(day.date, slot.hour)}
+                  onClick={() => onSelectSlot(day.date, slot.startMinutes)}
                   className={`mono rounded-md py-1 text-[11px] ${slotClasses(
                     slot.status,
                     isSelected

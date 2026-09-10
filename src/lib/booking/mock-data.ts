@@ -29,8 +29,8 @@ export type Reservation = {
   therapistId: string;
   roomId: string;
   date: string; // ISO yyyy-mm-dd
-  startHour: number; // 9-20
-  durationMinutes: number; // 5-45, step 5 (requested treatment length; the full hour is blocked)
+  startMinutes: number; // minutes from midnight, 15-minute steps within business hours
+  durationMinutes: number; // 5-45, step 5 (requested treatment length; +15min cleanup buffer is also blocked)
   note: string;
   autoAssigned: boolean;
   createdAt: number;
@@ -69,7 +69,7 @@ function seedReservations(): Reservation[] {
       therapistId: "T2001",
       roomId: "room-1",
       date: iso(today),
-      startHour: 10,
+      startMinutes: 10 * 60,
       durationMinutes: 30,
       note: "",
       autoAssigned: true,
@@ -82,7 +82,7 @@ function seedReservations(): Reservation[] {
       therapistId: "T2004",
       roomId: "room-2",
       date: iso(today),
-      startHour: 17,
+      startMinutes: 17 * 60,
       durationMinutes: 45,
       note: "",
       autoAssigned: false,

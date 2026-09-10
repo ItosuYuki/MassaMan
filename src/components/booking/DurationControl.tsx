@@ -53,8 +53,7 @@ export function DurationControl(props: { durationMinutes: number; onChange: (min
       </div>
 
       <p className="mt-2 text-[11px] text-ink-faint">
-        施術時間は最大{MAX_DURATION}分です。予約枠は1時間単位で確保され、残り時間は片付けのため他の方は
-        この枠を予約できません。
+        施術時間は最大{MAX_DURATION}分です。施術後の15分は片付けのため、他の方はこの時間帯を予約できません。
       </p>
     </div>
   );

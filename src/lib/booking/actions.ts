@@ -3,20 +3,39 @@
 import { requireRole } from "@/lib/dal";
 import {
   getWeekDates,
-  getHourSlots,
+  getTimeSlots,
   formatIsoDate,
   isSlotInPast,
   BUSINESS_DAYS,
   BUSINESS_HOURS,
+  SLOT_STEP_MINUTES,
 } from "./schedule";
 import { computeSlotStatus, type SlotStatus } from "./availability";
 import { computeOccupancyRate } from "./occupancy";
 import { autoAssignTherapist, type TherapistCandidate } from "./auto-assign";
-import { getStore, nextReservationId, ROOMS, THERAPISTS, type Gender } from "./mock-data";
+import { getStore, nextReservationId, ROOMS, THERAPISTS, type Gender, type Reservation } from "./mock-data";
+
+/** Post-treatment cleanup buffer: nobody else may book this therapist/room for this long after. */
+const CLEANUP_BUFFER_MINUTES = 15;
+
+function occupiedRange(r: Pick<Reservation, "startMinutes" | "durationMinutes">) {
+  return { start: r.startMinutes, end: r.startMinutes + r.durationMinutes + CLEANUP_BUFFER_MINUTES };
+}
+
+/** Whether a reservation's occupied range (treatment + cleanup buffer) overlaps a 15-min tick. */
+function reservationCoversTick(r: Pick<Reservation, "startMinutes" | "durationMinutes">, tick: number): boolean {
+  const { start, end } = occupiedRange(r);
+  return start < tick + SLOT_STEP_MINUTES && tick < end;
+}
+
+/** Whether two [start, end) ranges (in minutes) overlap. */
+function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+  return aStart < bEnd && bStart < aEnd;
+}
 
 export type AvailabilityDay = {
   date: string;
-  slots: { hour: number; status: SlotStatus }[];
+  slots: { startMinutes: number; status: SlotStatus }[];
 };
 
 export type AvailabilityResult = {
@@ -30,7 +49,7 @@ export async function getAvailability(weekStartIso: string): Promise<Availabilit
   const anchor = new Date(`${weekStartIso}T00:00:00`);
   const weekDates = getWeekDates(anchor);
   const weekDateIsos = weekDates.map(formatIsoDate);
-  const hourSlots = getHourSlots();
+  const timeSlots = getTimeSlots();
   const totalRooms = ROOMS.length;
   const { reservations } = getStore();
   const now = new Date();
@@ -39,15 +58,16 @@ export async function getAvailability(weekStartIso: string): Promise<Availabilit
     const dateIso = formatIsoDate(date);
     const dayReservations = reservations.filter((r) => r.date === dateIso);
 
-    const slots = hourSlots.map((hour) => {
-      const atHour = dayReservations.filter((r) => r.startHour === hour);
+    const slots = timeSlots.map((tick) => {
+      const coveringTick = dayReservations.filter((r) => reservationCoversTick(r, tick));
+      const bookedRoomCount = new Set(coveringTick.map((r) => r.roomId)).size;
       const status = computeSlotStatus({
         totalRooms,
-        bookedRoomCount: atHour.length,
-        isOwnReservation: atHour.some((r) => r.userEmployeeId === session.employeeId),
-        isPast: isSlotInPast(dateIso, hour, now),
+        bookedRoomCount,
+        isOwnReservation: coveringTick.some((r) => r.userEmployeeId === session.employeeId),
+        isPast: isSlotInPast(dateIso, tick, now),
       });
-      return { hour, status };
+      return { startMinutes: tick, status };
     });
 
     return { date: dateIso, slots };
@@ -72,7 +92,8 @@ export type TherapistOption = {
 
 export async function getTherapistCandidates(
   date: string,
-  startHour: number,
+  startMinutes: number,
+  durationMinutes: number,
   genderFilter: Gender[]
 ): Promise<TherapistOption[]> {
   await requireRole("user");
@@ -81,8 +102,16 @@ export async function getTherapistCandidates(
   const hoursPerDay = BUSINESS_HOURS.end - BUSINESS_HOURS.start + 1;
   const { reservations } = getStore();
 
-  const bookedThisSlotTherapistIds = new Set(
-    reservations.filter((r) => r.date === date && r.startHour === startHour).map((r) => r.therapistId)
+  const requestedEnd = startMinutes + durationMinutes + CLEANUP_BUFFER_MINUTES;
+  const dayReservations = reservations.filter((r) => r.date === date);
+
+  const busyTherapistIds = new Set(
+    dayReservations
+      .filter((r) => {
+        const { start, end } = occupiedRange(r);
+        return rangesOverlap(start, end, startMinutes, requestedEnd);
+      })
+      .map((r) => r.therapistId)
   );
 
   const options: TherapistOption[] = THERAPISTS.map((t) => {
@@ -94,7 +123,7 @@ export async function getTherapistCandidates(
       name: t.name,
       gender: t.gender,
       specialty: t.specialty,
-      isAvailable: !bookedThisSlotTherapistIds.has(t.id),
+      isAvailable: !busyTherapistIds.has(t.id),
       occupancyRate: computeOccupancyRate({
         reservationCountInWeek,
         businessDaysPerWeek: BUSINESS_DAYS.length,
@@ -117,7 +146,7 @@ export async function getTherapistCandidates(
 
 export async function createReservation(input: {
   date: string;
-  startHour: number;
+  startMinutes: number;
   durationMinutes: number;
   therapistId: string;
   note?: string;
@@ -126,7 +155,7 @@ export async function createReservation(input: {
   const session = await requireRole("user");
   const store = getStore();
 
-  if (isSlotInPast(input.date, input.startHour, new Date())) {
+  if (isSlotInPast(input.date, input.startMinutes, new Date())) {
     return { ok: false, error: "過去の日時は予約できません。" };
   }
 
@@ -143,29 +172,32 @@ export async function createReservation(input: {
     return { ok: false, error: "指定された施術者が見つかりません。" };
   }
 
-  const reservationsAtSlot = store.reservations.filter(
-    (r) => r.date === input.date && r.startHour === input.startHour
-  );
+  const requestedEnd = input.startMinutes + input.durationMinutes + CLEANUP_BUFFER_MINUTES;
+  const dayReservations = store.reservations.filter((r) => r.date === input.date);
+  const overlapping = dayReservations.filter((r) => {
+    const { start, end } = occupiedRange(r);
+    return rangesOverlap(start, end, input.startMinutes, requestedEnd);
+  });
 
-  const therapistAlreadyBooked = reservationsAtSlot.some((r) => r.therapistId === therapist.id);
+  const therapistAlreadyBooked = overlapping.some((r) => r.therapistId === therapist.id);
   if (therapistAlreadyBooked) {
     return { ok: false, error: "この枠は埋まりました。別の枠を選んでください。" };
   }
 
-  const bookedRoomIds = new Set(reservationsAtSlot.map((r) => r.roomId));
+  const bookedRoomIds = new Set(overlapping.map((r) => r.roomId));
   const freeRoom = ROOMS.find((room) => !bookedRoomIds.has(room.id));
   if (!freeRoom) {
     return { ok: false, error: "この枠は埋まりました。別の枠を選んでください。" };
   }
 
-  const reservation = {
+  const reservation: Reservation = {
     id: nextReservationId(),
     userEmployeeId: session.employeeId,
     userName: session.name,
     therapistId: therapist.id,
     roomId: freeRoom.id,
     date: input.date,
-    startHour: input.startHour,
+    startMinutes: input.startMinutes,
     durationMinutes: input.durationMinutes,
     note: input.note ?? "",
     autoAssigned: input.autoAssigned,
@@ -174,4 +206,35 @@ export async function createReservation(input: {
   store.reservations.push(reservation);
 
   return { ok: true, reservationId: reservation.id };
+}
+
+export async function cancelReservation(
+  reservationId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await requireRole("user");
+  const store = getStore();
+
+  const index = store.reservations.findIndex((r) => r.id === reservationId);
+  if (index === -1) {
+    return { ok: false, error: "予約が見つかりません。" };
+  }
+  if (store.reservations[index].userEmployeeId !== session.employeeId) {
+    return { ok: false, error: "この予約をキャンセルする権限がありません。" };
+  }
+
+  store.reservations.splice(index, 1);
+  return { ok: true };
+}
+
+/** Finds the current user's reservation covering a given slot, if any — used to open the cancel dialog. */
+export async function getOwnReservationAt(
+  date: string,
+  startMinutes: number
+): Promise<{ id: string } | null> {
+  const session = await requireRole("user");
+  const { reservations } = getStore();
+  const match = reservations.find(
+    (r) => r.date === date && r.userEmployeeId === session.employeeId && reservationCoversTick(r, startMinutes)
+  );
+  return match ? { id: match.id } : null;
 }
