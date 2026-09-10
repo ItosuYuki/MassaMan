@@ -118,6 +118,14 @@ export function todayISO(): string {
   return toISO(new Date());
 }
 
+/** Validates a `ref` searchParam before it reaches parseISO/rangeForPeriod — an
+ * unparseable date (e.g. `?ref=bad`) otherwise produces an Invalid Date that
+ * throws "Invalid time value" once formatted, a 500 for user-controlled input. */
+export function isValidISODate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  return !Number.isNaN(parseISO(s).getTime());
+}
+
 /** One point on the utilization/vacancy trend x-axis. `closed` marks a bucket
  * that's entirely a weekend/public holiday (single-day buckets only — a
  * month/year bucket spans multiple days, so it's never marked closed even if

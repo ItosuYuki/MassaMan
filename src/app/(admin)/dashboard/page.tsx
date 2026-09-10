@@ -4,35 +4,33 @@ import {
   previousRangeForPeriod,
   formatRangeLabel,
   todayISO,
+  isValidISODate,
   type PeriodType,
 } from "@/lib/period";
 import {
   getOverallStats,
   getUtilizationTrend,
   getUtilizationTrendByAttribute,
-  getVacancyTrend,
+  getShiftBreakdownTrend,
   getTherapistUtilization,
-  getAttributeUtilization,
+  getAllAttributeUtilization,
   attributeValueOptions,
   overallAttributeSeries,
+  attributeFilterFromLineSelection,
+  listDepartments,
+  ALL_ATTRIBUTES,
+  ATTRIBUTE_LABEL,
   OVERALL_ATTRIBUTE_VALUE,
   type AttributeKind,
 } from "@/lib/dashboard-data";
 import { sql } from "@/lib/db";
-import { DashboardShell, AttributeTabs } from "@/components/dashboard/dashboard-shell";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { StatTile } from "@/components/dashboard/stat-tile";
-import { UtilizationTrendChart, AttributeTrendChart, VacancyChart, TherapistBarList, AttributeBarList } from "@/components/dashboard/charts";
+import { UtilizationTrendChart, AttributeTrendChart, ShiftBreakdownChart, TherapistBarList, AttributeBarSections } from "@/components/dashboard/charts";
 import { withParams, valueCheckboxOptions, attributeTabOptions } from "@/lib/dashboard-url";
-
-const ALL_ATTRIBUTES: AttributeKind[] = ["age", "gender", "department"];
-const ATTRIBUTE_LABEL: Record<AttributeKind, string> = { age: "年代", gender: "性別", department: "部署" };
 
 function parsePeriod(value: string | undefined): PeriodType {
   return value === "day" || value === "week" || value === "month" || value === "year" ? value : "week";
-}
-
-function parseAttribute(value: string | undefined): AttributeKind {
-  return value === "age" || value === "gender" || value === "department" ? value : "department";
 }
 
 function parseLineAttr(value: string | undefined): AttributeKind {
@@ -57,7 +55,7 @@ const TREND_HEADING: Record<PeriodType, string> = {
   year: "月別 利用率",
 };
 
-const VACANCY_UNIT = "単位：時間";
+const SHIFT_BREAKDOWN_UNIT = "単位：時間";
 
 export default async function AdminDashboardPage({
   searchParams,
@@ -68,12 +66,12 @@ export default async function AdminDashboardPage({
   const sp = await searchParams;
 
   const period = parsePeriod(sp.period);
-  const refDate = sp.ref ?? todayISO();
+  const refDate = sp.ref && isValidISODate(sp.ref) ? sp.ref : todayISO();
   const compare = sp.compare !== "0";
-  const attribute = parseAttribute(sp.attr);
   const lineAttr = parseLineAttr(sp.lineAttr);
   const lineValues = parseLineValues(sp.lineValues);
-  const filters = { ageBracket: sp.age ?? "all", gender: sp.gender ?? "all", department: sp.dept ?? "all" };
+  const departments = await listDepartments();
+  const filters = attributeFilterFromLineSelection(lineAttr, lineValues, departments);
 
   const range = rangeForPeriod(period, refDate);
   const previousRange = previousRangeForPeriod(period, refDate);
@@ -93,9 +91,9 @@ export default async function AdminDashboardPage({
             : []),
         ]
       : [];
-  const vacancy = await getVacancyTrend(period, range);
+  const shiftBreakdown = await getShiftBreakdownTrend(period, range);
   const therapists = await getTherapistUtilization(range, filters);
-  const attributeBuckets = await getAttributeUtilization(range, attribute, filters);
+  const attributeBuckets = await getAllAttributeUtilization(range, filters);
 
   const roster = await sql<{ gender: string }[]>`
     SELECT u.gender FROM therapist_profiles tp JOIN users u ON u.id = tp.user_id WHERE tp.is_active = true
@@ -103,9 +101,9 @@ export default async function AdminDashboardPage({
   const maleCount = roster.filter((r) => r.gender === "male").length;
   const femaleCount = roster.filter((r) => r.gender === "female").length;
 
-  const params = { period: sp.period, ref: sp.ref, compare: sp.compare, age: sp.age, gender: sp.gender, dept: sp.dept, attr: sp.attr, lineAttr: sp.lineAttr, lineValues: sp.lineValues };
+  const params = { period: sp.period, ref: sp.ref, compare: sp.compare, lineAttr: sp.lineAttr, lineValues: sp.lineValues };
   const firstTherapistId = therapists[0]?.therapistId;
-  const isFiltered = filters.ageBracket !== "all" || filters.gender !== "all" || filters.department !== "all";
+  const isFiltered = filters.ageBracket.length > 0 || filters.gender.length > 0 || filters.department.length > 0;
   const trendDescription =
     lineValues.length > 0
       ? "全体の利用率のうち、各属性が占める内訳です（合計すると全体利用率になります）"
@@ -171,19 +169,16 @@ export default async function AdminDashboardPage({
       <div className="grid grid-cols-[1.6fr_1fr] gap-4">
         <div className="bg-surface border border-border rounded-2xl px-6 py-5.5 flex flex-col">
           <div className="flex items-baseline justify-between mb-0.5">
-            <h3 className="text-sm">{TREND_HEADING[period].replace("利用率", "空き時間")}</h3>
-            <span className="text-[11px] text-ink-faint">{VACANCY_UNIT}</span>
+            <h3 className="text-sm">{TREND_HEADING[period].replace("利用率", "稼働内訳")}</h3>
+            <span className="text-[11px] text-ink-faint">{SHIFT_BREAKDOWN_UNIT}</span>
           </div>
-          <p className="mt-0.5 mb-4 text-[11px] text-ink-faint">利用率と同じ軸で、空いている時間を確認できます</p>
-          <VacancyChart points={vacancy} />
+          <p className="mt-0.5 mb-4 text-[11px] text-ink-faint">出勤時間のうち、施術に使われた時間と空いていた時間の内訳です</p>
+          <ShiftBreakdownChart points={shiftBreakdown} />
         </div>
 
         <div className="bg-surface border border-border rounded-2xl px-6 py-5.5 flex flex-col">
-          <div className="flex items-center justify-between mb-3.5">
-            <h3 className="text-sm">属性別 利用率</h3>
-            <AttributeTabs options={attributeTabOptions(ALL_ATTRIBUTES, attribute, ATTRIBUTE_LABEL, "attr", "/dashboard", params)} />
-          </div>
-          <AttributeBarList items={attributeBuckets} />
+          <h3 className="text-sm mb-3.5">属性別 利用率</h3>
+          <AttributeBarSections buckets={attributeBuckets} />
         </div>
       </div>
     </DashboardShell>

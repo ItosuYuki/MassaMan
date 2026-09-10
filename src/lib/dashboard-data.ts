@@ -1,21 +1,29 @@
 import "server-only";
 import { sql } from "@/lib/db";
 import { trendBuckets, HOURS, type DateRange, type PeriodType, type TrendBucket } from "@/lib/period";
+import {
+  type AttributeKind,
+  type AttributeFilter,
+  ALL_ATTRIBUTES,
+  ATTRIBUTE_LABEL,
+  DEFAULT_FILTER,
+  OVERALL_ATTRIBUTE_VALUE,
+  attributeFilterFromLineSelection,
+} from "@/lib/attribute-filter";
 
 export { HOURS };
-
-export type AttributeKind = "age" | "gender" | "department";
-
-export type AttributeFilter = {
-  ageBracket: string; // "all" | "20s" | "30s" | "40s" | "50s_plus"
-  gender: string; // "all" | "male" | "female"
-  department: string; // "all" | department name
+export {
+  type AttributeKind,
+  type AttributeFilter,
+  ALL_ATTRIBUTES,
+  ATTRIBUTE_LABEL,
+  DEFAULT_FILTER,
+  OVERALL_ATTRIBUTE_VALUE,
+  attributeFilterFromLineSelection,
 };
 
-export const DEFAULT_FILTER: AttributeFilter = { ageBracket: "all", gender: "all", department: "all" };
-
 function isFiltered(filters: AttributeFilter): boolean {
-  return filters.ageBracket !== "all" || filters.gender !== "all" || filters.department !== "all";
+  return filters.ageBracket.length > 0 || filters.gender.length > 0 || filters.department.length > 0;
 }
 
 type ShiftRow = { therapist_id: string; work_date: string; start_time: string; end_time: string };
@@ -36,6 +44,18 @@ function minutesBetween(start: string, end: string): number {
   return eh * 60 + em - (sh * 60 + sm);
 }
 
+/** Every reservation blocks the room for 15 extra minutes of cleanup/prep after
+ * the recorded treatment time (see design/therapist-schedule-mobile.html:
+ * "施術は最大45分・片付け15分を含みます"). The stored end_time only covers the
+ * ~1〜45分 treatment itself, so every place that sums a reservation's occupied
+ * minutes needs to add this on top — shifts (therapist_shifts) aren't
+ * reservations and don't get it. */
+const CLEANUP_BUFFER_MINUTES = 15;
+
+function reservationMinutes(r: { start_time: string; end_time: string }): number {
+  return minutesBetween(r.start_time, r.end_time) + CLEANUP_BUFFER_MINUTES;
+}
+
 function hourOf(time: string): number {
   return Number(time.split(":")[0]);
 }
@@ -53,16 +73,19 @@ async function fetchShifts(range: DateRange, therapistId?: string): Promise<Shif
 
 /** WHERE-clause fragment for the age/gender/department filters, shared by
  * reservation and headcount queries so the two stay in sync (§ the "全体をその属性
- * 全体で考える" rule: narrowing the numerator must narrow the denominator to match). */
+ * 全体で考える" rule: narrowing the numerator must narrow the denominator to match).
+ * Each dimension is an OR of 1+ values (`= ANY(...)`) rather than a single
+ * equality, since the checkbox UI allows checking more than one value within
+ * a dimension (e.g. 20代 and 30代 both). */
 function attributeWhere(filters: AttributeFilter, extra?: { attribute: AttributeKind; value: string }) {
-  const age = extra?.attribute === "age" ? extra.value : filters.ageBracket;
-  const gender = extra?.attribute === "gender" ? extra.value : filters.gender;
-  const department = extra?.attribute === "department" ? extra.value : filters.department;
+  const age = extra?.attribute === "age" ? [extra.value] : filters.ageBracket;
+  const gender = extra?.attribute === "gender" ? [extra.value] : filters.gender;
+  const department = extra?.attribute === "department" ? [extra.value] : filters.department;
 
   return sql`
-    ${age !== "all" ? sql`AND u.age_bracket = ${age}::age_bracket` : sql``}
-    ${gender !== "all" ? sql`AND u.gender = ${gender}::gender` : sql``}
-    ${department !== "all" ? sql`AND d.name = ${department}` : sql``}
+    ${age.length > 0 ? sql`AND u.age_bracket = ANY(${age}::age_bracket[])` : sql``}
+    ${gender.length > 0 ? sql`AND u.gender = ANY(${gender}::gender[])` : sql``}
+    ${department.length > 0 ? sql`AND d.name = ANY(${department}::text[])` : sql``}
   `;
 }
 
@@ -134,7 +157,7 @@ function sumShiftMinutes(shifts: ShiftRow[]): number {
 }
 
 function sumReservationMinutes(reservations: ReservationRow[]): number {
-  return reservations.reduce((sum, r) => sum + minutesBetween(r.start_time, r.end_time), 0);
+  return reservations.reduce((sum, r) => sum + reservationMinutes(r), 0);
 }
 
 function rate(numerator: number, denominator: number): number {
@@ -223,11 +246,6 @@ export type AttributeTrendSeries = {
   points: { label: string; rate: number | null; previousRate: number | null; closed: boolean }[];
 };
 
-/** Sentinel value for the "全体" checkbox — not a real age/gender/department
- * key, so it's filtered out before reaching getUtilizationTrendByAttribute and
- * handled separately via overallAttributeSeries. */
-export const OVERALL_ATTRIBUTE_VALUE = "__all__";
-
 /** Wraps the plain occupancy trend (getUtilizationTrend's currentRate) as an
  * AttributeTrendSeries so it can be overlaid alongside per-value breakdown
  * lines when the admin checks "全体" — lets them compare, e.g., 男性/女性
@@ -274,24 +292,15 @@ export async function getUtilizationTrendByAttribute(
       const extra = { attribute, value: key };
       const previousBuckets = trendBuckets(period, previousRange);
       const points = await Promise.all(
-        buckets.map(async (b, i) => {
-          const previousBucket = previousBuckets[i];
-          return {
-            label: b.label,
-            rate: rateOrNull(await countBookedMinutesInBucket(b, range, filters, therapistId, extra), available[i]),
-            // The previous period can have fewer buckets than the current one (e.g. a
-            // 5-week month compared against a 4-week previous month) — there's simply
-            // no previous-period data for the extra point, not a rate of 0.
-            previousRate:
-              previousBucket === undefined
-                ? null
-                : rateOrNull(
-                    await countBookedMinutesInBucket(previousBucket, previousRange, filters, therapistId, extra),
-                    (await countMinutesInBucket(previousBucket, previousRange, therapistId)).available,
-                  ),
-            closed: b.closed,
-          };
-        })
+        buckets.map(async (b, i) => ({
+          label: b.label,
+          rate: rateOrNull(await countBookedMinutesInBucket(b, range, filters, therapistId, extra), available[i]),
+          previousRate: rateOrNull(
+            await countBookedMinutesInBucket(previousBuckets[i], previousRange, filters, therapistId, extra),
+            (await countMinutesInBucket(previousBuckets[i], previousRange, therapistId)).available,
+          ),
+          closed: b.closed,
+        }))
       );
       return { valueLabel: attributeLabel(attribute, key), points };
     })
@@ -315,16 +324,17 @@ async function countBookedMinutesInBucket(
   const attrClause = attributeWhere(filters, extra);
 
   const rows = await sql<{ start_time: string; end_time: string }[]>`
-    SELECT r.start_time, r.end_time
+    SELECT r.start_time, LEAST(r.end_time, TIME '20:00') AS end_time
     FROM reservations r
     JOIN users u ON u.id = r.user_id
     LEFT JOIN departments d ON d.id = u.department_id
     WHERE r.status IN ('confirmed', 'completed')
+      AND r.start_time < TIME '20:00'
       ${bucketClause}
       ${therapistClause}
       ${attrClause}
   `;
-  return rows.reduce((sum, r) => sum + minutesBetween(r.start_time, r.end_time), 0);
+  return rows.reduce((sum, r) => sum + reservationMinutes(r), 0);
 }
 
 async function countUsersInBucket(
@@ -382,29 +392,39 @@ async function countMinutesInBucket(
     } else if (hourOf(r.start_time) !== bucket.hour) {
       continue;
     }
-    booked += minutesBetween(r.start_time, r.end_time);
+    booked += reservationMinutes(r);
   }
 
   return { booked, available };
 }
 
-export type VacancyPoint = { label: string; vacantHours: number | null; closed: boolean };
+export type ShiftBreakdownPoint = {
+  label: string;
+  bookedHours: number | null;
+  vacantHours: number | null;
+  closed: boolean;
+};
 
-/** 空き時間 = (マッサージ師の出勤可能時間の合計 − マッサージに使われた時間の合計) ÷ 60,
- * bucketed with the SAME trendBuckets() as getUtilizationTrend so the two charts
- * stay visually synced regardless of period. Pass therapistId to scope to one
- * therapist (used by the individual view). */
-export async function getVacancyTrend(
+/** 出勤可能時間 = 施術時間（マッサージに使われた時間） + 空き時間（残り）、÷ 60 —
+ * a standalone 空き時間-only chart drew the same shift-time axis as the
+ * utilization chart next to it but told only half the story (vacant time
+ * alone doesn't say vacant relative to what); returning both halves lets the
+ * chart stack them into one bar per bucket instead. Bucketed with the SAME
+ * trendBuckets() as getUtilizationTrend so the two charts stay visually
+ * synced regardless of period. Pass therapistId to scope to one therapist
+ * (used by the individual view). */
+export async function getShiftBreakdownTrend(
   period: PeriodType,
   range: DateRange,
   therapistId?: string
-): Promise<VacancyPoint[]> {
+): Promise<ShiftBreakdownPoint[]> {
   const buckets = trendBuckets(period, range);
   return Promise.all(
     buckets.map(async (b) => {
       const { booked, available } = await countMinutesInBucket(b, range, therapistId);
       return {
         label: b.label,
+        bookedHours: available > 0 ? Math.round(Math.min(booked, available) / 6) / 10 : null,
         vacantHours: available > 0 ? Math.round(Math.max(0, available - booked) / 6) / 10 : null,
         closed: b.closed,
       };
@@ -468,46 +488,80 @@ export function attributeValueOptions(attribute: AttributeKind): { value: string
   return attributeOrder(attribute).map((key) => ({ value: key, label: attributeLabel(attribute, key) }));
 }
 
-/** 属性別 利用者数: 20代の利用率 = 20代で利用した人数 ÷ 会社の全利用者数（属性を
- * 問わない）— the denominator is always the WHOLE eligible population (narrowed
- * only by any other active top-filter, e.g. gender=男性), never re-scoped down
- * to the bucket's own subgroup size. That keeps small groups (e.g. a
- * 3-person department) from trivially reading as ~100%. */
+function filterValuesFor(filters: AttributeFilter, attribute: AttributeKind): string[] {
+  return attribute === "age" ? filters.ageBracket : attribute === "gender" ? filters.gender : filters.department;
+}
+
+/** 属性別 利用率: 20代の割合 = 20代で利用した人数 ÷ 利用した人数の合計（属性を
+ * 問わない）— the denominator is everyone who actually used it in `range`
+ * (narrowed by any other active top-filter, e.g. gender=男性), not the whole
+ * company headcount, so the stacked bar's segments sum to ~100% instead of
+ * to whatever fraction of the whole company happened to book.
+ *
+ * If `attribute` is ITSELF the actively-filtered dimension (e.g. viewing the
+ * 年代 breakdown while checked boxes have already filtered to 20代), a bucket
+ * outside the checked values is 0 by construction — nobody in the (already
+ * age=20代-only) population can also be 30代 — so it's short-circuited
+ * instead of querying attributeWhere's `extra` override, which replaces
+ * rather than intersects with the top filter and would otherwise ignore it
+ * for this one dimension. */
 export async function getAttributeUtilization(
   range: DateRange,
   attribute: AttributeKind,
   filters: AttributeFilter,
   therapistId?: string
 ): Promise<AttributeBucket[]> {
-  const headcount = await getHeadcount(filters);
+  const totalUsers = await getDistinctUserCount(range, filters, therapistId);
+  const activeValues = filterValuesFor(filters, attribute);
   return Promise.all(
     attributeOrder(attribute).map(async (key) => {
+      if (activeValues.length > 0 && !activeValues.includes(key)) {
+        return { label: attributeLabel(attribute, key), rate: 0 };
+      }
       const extra = { attribute, value: key };
       return {
         label: attributeLabel(attribute, key),
-        rate: rate(await getDistinctUserCount(range, filters, therapistId, extra), headcount),
+        rate: rate(await getDistinctUserCount(range, filters, therapistId, extra), totalUsers),
       };
     })
   );
 }
 
-/** Share (%) of a therapist's own client base per attribute bucket — sums to ~100, unlike getAttributeUtilization. */
-export async function getClientAttributeShare(
+/** getAttributeUtilization for all three dimensions at once — the「属性別 利用率」
+ * panel shows 年代/性別/部署 together rather than behind a tab switcher, since
+ * flipping through one dimension at a time hid the other two's ratios. */
+export async function getAllAttributeUtilization(
   range: DateRange,
-  attribute: AttributeKind,
-  therapistId: string
-): Promise<AttributeBucket[]> {
-  const reservations = await fetchReservations(range, DEFAULT_FILTER, therapistId);
-  const total = reservations.length;
+  filters: AttributeFilter,
+  therapistId?: string
+): Promise<Record<AttributeKind, AttributeBucket[]>> {
+  const [age, gender, department] = await Promise.all(
+    ALL_ATTRIBUTES.map((a) => getAttributeUtilization(range, a, filters, therapistId))
+  );
+  return { age, gender, department };
+}
 
-  const counts = new Map<string, number>();
+/** Share (%) of a therapist's own DISTINCT clients per attribute bucket — sums
+ * to ~100, unlike getAttributeUtilization. Denominator/numerator are both
+ * per-client (one vote per user_id), not per-reservation, so a client with
+ * many repeat bookings doesn't skew the mix (each user's attribute is taken
+ * once, from their first reservation in range). */
+function clientAttributeShare(reservations: ReservationRow[], attribute: AttributeKind): AttributeBucket[] {
+  const attributeByUser = new Map<string, string>();
   for (const r of reservations) {
+    if (attributeByUser.has(r.user_id)) continue;
     const key =
       attribute === "age"
         ? r.age_bracket ?? "unknown"
         : attribute === "gender"
           ? r.gender
           : r.department_name ?? "その他";
+    attributeByUser.set(r.user_id, key);
+  }
+  const total = attributeByUser.size;
+
+  const counts = new Map<string, number>();
+  for (const key of attributeByUser.values()) {
     if (attribute === "age" && key === "unknown") continue;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
@@ -518,29 +572,52 @@ export async function getClientAttributeShare(
   }));
 }
 
+/** clientAttributeShare for all three dimensions at once — same tabs-removal
+ * rationale as getAllAttributeUtilization, for the individual view's「〇〇の
+ * 利用者属性」panel. Fetches reservations once and reuses it across dimensions
+ * instead of re-querying per dimension. */
+export async function getAllClientAttributeShare(
+  range: DateRange,
+  therapistId: string
+): Promise<Record<AttributeKind, AttributeBucket[]>> {
+  const reservations = await fetchReservations(range, DEFAULT_FILTER, therapistId);
+  return {
+    age: clientAttributeShare(reservations, "age"),
+    gender: clientAttributeShare(reservations, "gender"),
+    department: clientAttributeShare(reservations, "department"),
+  };
+}
+
 export type TherapistSummary = {
   therapistId: string;
   name: string;
-  specialties: string | null;
+  specialties: string[];
+  bio: string | null;
+  roomName: string | null;
   personalRate: number;
   overallAvgRate: number;
   reservationCount: number;
-  repeaterCount: number;
+  distinctUsers: number;
   avgDurationMinutes: number;
 };
 
 /** 個人利用率: occupancy (this therapist's booked ÷ shift minutes) when
  * unfiltered, headcount ratio (this therapist's distinct clients ÷ total
  * headcount) when a filter is active — same switch as getOverallStats, so
- * 全体平均 (computed the same way, company-wide) is always a fair comparison. */
+ * 全体平均 (計算方法は全社共通) is always a fair comparison. */
 export async function getTherapistSummary(
   therapistId: string,
   range: DateRange,
   filters: AttributeFilter
 ): Promise<TherapistSummary> {
-  const profiles = await sql<{ therapist_id: string; name: string; specialties: string[] | null }[]>`
-    SELECT tp.id as therapist_id, u.name, tp.specialties FROM therapist_profiles tp
-    JOIN users u ON u.id = tp.user_id WHERE tp.id = ${therapistId}
+  const profiles = await sql<
+    { therapist_id: string; name: string; specialties: string[] | null; bio: string | null; room_name: string | null }[]
+  >`
+    SELECT tp.id as therapist_id, u.name, tp.specialties, tp.bio, r.name as room_name
+    FROM therapist_profiles tp
+    JOIN users u ON u.id = tp.user_id
+    LEFT JOIN rooms r ON r.id = tp.room_id
+    WHERE tp.id = ${therapistId}
   `;
   const profile = profiles[0];
   if (!profile) {
@@ -549,12 +626,7 @@ export async function getTherapistSummary(
 
   const reservations = await fetchReservations(range, filters, therapistId);
   const bookedMinutes = sumReservationMinutes(reservations);
-
-  const userCounts = new Map<string, number>();
-  for (const r of reservations) {
-    userCounts.set(r.user_id, (userCounts.get(r.user_id) ?? 0) + 1);
-  }
-  const repeaterCount = [...userCounts.values()].filter((c) => c >= 2).length;
+  const distinctUsers = new Set(reservations.map((r) => r.user_id)).size;
 
   let personalRate: number;
   let overallAvgRate: number;
@@ -573,11 +645,13 @@ export async function getTherapistSummary(
   return {
     therapistId: profile.therapist_id,
     name: profile.name,
-    specialties: profile.specialties?.[0] ?? null,
+    specialties: profile.specialties ?? [],
+    bio: profile.bio,
+    roomName: profile.room_name,
     personalRate,
     overallAvgRate,
     reservationCount: reservations.length,
-    repeaterCount,
+    distinctUsers,
     avgDurationMinutes: reservations.length > 0 ? Math.round(bookedMinutes / reservations.length) : 0,
   };
 }

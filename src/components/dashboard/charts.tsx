@@ -1,15 +1,22 @@
 import type {
   TrendPoint,
-  VacancyPoint,
+  ShiftBreakdownPoint,
   TherapistUtilization,
   AttributeBucket,
   AttributeTrendSeries,
+  AttributeKind,
 } from "@/lib/dashboard-data";
+import { ALL_ATTRIBUTES, ATTRIBUTE_LABEL } from "@/lib/dashboard-data";
 
 const Y_TICKS = [100, 75, 50, 25, 0];
 /** Horizontal inset (% of the plot width) so the first/last points don't sit
  * flush against the panel edges. */
 const X_PAD = 6;
+/** Vertical inset (% of the plot height), mirroring X_PAD — without it, a
+ * point at exactly 0% or 100% sits flush against the plot's top/bottom edge,
+ * and since the marker is centered ON that edge (-translate-y-1/2), half of
+ * it renders past the edge where the plot's own `overflow-hidden` clips it. */
+const Y_PAD = 4;
 
 const LINE_COLORS = [
   "var(--color-accent)",
@@ -112,7 +119,7 @@ function LineChart({
 }) {
   const max = Math.max(100, ...series.flatMap((s) => s.values.filter((v): v is number => v !== null)));
   const xs = xPositions(labels.length);
-  const toY = (v: number) => 100 - (v / max) * 100;
+  const toY = (v: number) => Y_PAD + (1 - v / max) * (100 - 2 * Y_PAD);
   const pathFor = (values: (number | null)[]) => {
     let path = "";
     values.forEach((v, i) => {
@@ -132,7 +139,7 @@ function LineChart({
             <span
               key={t}
               className="mono absolute right-1.5 text-[10px] text-ink-faint -translate-y-1/2"
-              style={{ top: `${100 - (t / max) * 100}%` }}
+              style={{ top: `${toY((t / 100) * max)}%` }}
             >
               {Math.round((t / 100) * max)}%
             </span>
@@ -145,7 +152,7 @@ function LineChart({
             <div
               key={t}
               className={`absolute left-0 right-0 ${t === 0 ? "border-t border-border" : "border-t border-dashed border-border"}`}
-              style={{ top: `${100 - (t / max) * 100}%` }}
+              style={{ top: `${toY((t / 100) * max)}%` }}
             />
           ))}
 
@@ -166,13 +173,22 @@ function LineChart({
           </svg>
 
           {/* Point markers as plain HTML circles (fixed px size) — an SVG <circle> inside a
-              non-uniformly-stretched viewBox renders as an ellipse, not a circle. */}
+              non-uniformly-stretched viewBox renders as an ellipse, not a circle.
+              `closed` is derived from the CURRENT range's buckets only (see
+              getUtilizationTrend) — it doesn't know whether the PREVIOUS
+              period's same bucket was itself closed, so the dashed/previous
+              series always keeps its real color rather than graying out on
+              what might just be this period's holiday. */}
           {series.map((s, si) =>
             s.values.map((v, i) => v !== null && (
               <div
                 key={`${si}-${i}`}
                 className="absolute w-[7px] h-[7px] rounded-full -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${xs[i]}%`, top: `${toY(v)}%`, background: closed[i] ? "var(--color-border)" : s.color }}
+                style={{
+                  left: `${xs[i]}%`,
+                  top: `${toY(v)}%`,
+                  background: closed[i] && !s.dashed ? "var(--color-border)" : s.color,
+                }}
               />
             ))
           )}
@@ -244,34 +260,80 @@ export function AttributeTrendChart({ series, showPrevious }: { series: Attribut
   );
 }
 
-export function VacancyChart({ points }: { points: VacancyPoint[] }) {
-  const max = Math.max(1, ...points.flatMap((p) => (p.vacantHours === null ? [] : [p.vacantHours])));
+/** 施術時間 (booked) stacked with 空き時間 (vacant) into one bar per bucket —
+ * a 空き時間-only bar told only half the story (vacant relative to what?);
+ * stacking both onto the shift-time axis they actually share answers that. */
+export function ShiftBreakdownChart({ points }: { points: ShiftBreakdownPoint[] }) {
+  const max = Math.max(
+    1,
+    ...points.flatMap((p) => (p.bookedHours === null || p.vacantHours === null ? [] : [p.bookedHours + p.vacantHours]))
+  );
 
   return (
-    <div className="flex flex-col grow px-[3%]">
-      <div className="h-[150px] flex items-end gap-2 border-b border-border overflow-hidden">
-        {points.map((p, i) => (
-          <div key={i} className="relative flex flex-col items-center justify-end gap-1.5 flex-1 min-w-0 h-full">
-            {p.closed && <div className="absolute inset-0 -mx-1 bg-ink-faint/10" />}
-            {p.vacantHours !== null && <span className="relative mono text-[10px] text-ink-faint whitespace-nowrap">{p.vacantHours}h</span>}
-            {p.vacantHours !== null && <div
-              className={`relative w-full max-w-[26px] rounded-t ${p.closed ? "bg-ink-faint/25" : "bg-accent opacity-40"}`}
-              style={{ height: `${(p.vacantHours / max) * 100}%` }}
-            />}
-          </div>
-        ))}
+    <div className="flex flex-col grow">
+      <div className="flex items-center gap-3 mb-2 text-[11px] text-ink-faint">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "var(--color-accent)" }} />
+          施術時間
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "var(--color-accent)", opacity: 0.35 }} />
+          空き時間
+        </span>
       </div>
-      {/* Same flex-1 + gap-2 columns as the bar row above, so each label lands
-          directly under its own bar instead of drifting due to a mismatched gap. */}
-      <div className="flex gap-2 mt-1.5">
-        {points.map((p, i) => (
-          <span
-            key={i}
-            className={`mono text-[10px] flex-1 min-w-0 text-center truncate ${p.closed ? "text-ink-faint/40" : "text-ink-faint"}`}
-          >
-            {p.label}
-          </span>
-        ))}
+      <div className="flex flex-col grow px-[3%]">
+        <div className="h-[150px] flex items-end gap-2 border-b border-border overflow-hidden">
+          {points.map((p, i) => {
+            // Round the sum too — adding two already-rounded-to-0.1 floats
+            // (e.g. 18.1 + 18.0) can itself land on a binary float that isn't
+            // exactly 36.1, printing as "36.099999999999994".
+            const total =
+              p.bookedHours !== null && p.vacantHours !== null
+                ? Math.round((p.bookedHours + p.vacantHours) * 10) / 10
+                : null;
+            return (
+              <div key={i} className="relative flex flex-col items-center justify-end gap-1.5 flex-1 min-w-0 h-full">
+                {p.closed && <div className="absolute inset-0 -mx-1 bg-ink-faint/10" />}
+                {total !== null && (
+                  <span className="relative mono text-[10px] text-ink-faint w-full text-center truncate">{total}h</span>
+                )}
+                {total !== null && total > 0 && (
+                  <div
+                    className="relative w-full max-w-[26px] rounded-t overflow-hidden flex flex-col"
+                    style={{ height: `${(total / max) * 100}%` }}
+                  >
+                    <div
+                      style={{
+                        height: `${(p.vacantHours! / total) * 100}%`,
+                        background: p.closed ? "var(--color-ink-faint)" : "var(--color-accent)",
+                        opacity: p.closed ? 0.25 : 0.35,
+                      }}
+                    />
+                    <div
+                      style={{
+                        height: `${(p.bookedHours! / total) * 100}%`,
+                        background: p.closed ? "var(--color-ink-faint)" : "var(--color-accent)",
+                        opacity: p.closed ? 0.25 : 1,
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {/* Same flex-1 + gap-2 columns as the bar row above, so each label lands
+            directly under its own bar instead of drifting due to a mismatched gap. */}
+        <div className="flex gap-2 mt-1.5">
+          {points.map((p, i) => (
+            <span
+              key={i}
+              className={`mono text-[10px] flex-1 min-w-0 text-center truncate ${p.closed ? "text-ink-faint/40" : "text-ink-faint"}`}
+            >
+              {p.label}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -293,32 +355,51 @@ export function TherapistBarList({ items }: { items: TherapistUtilization[] }) {
   );
 }
 
-export function AttributeBarList({ items }: { items: AttributeBucket[] }) {
+/** One dimension's buckets (e.g. 年代's 20代/30代/40代/50代以上) as a single
+ * horizontal bar, segmented by each value's share instead of one separate bar
+ * per value — reads as "how the dimension splits" at a glance rather than as
+ * N independent percentages. Segment colors reuse colorForSeries, the same
+ * mapping the trend chart's per-value lines use, so a value is the same color
+ * everywhere on the page. Segments sum to ~100% (denominator is everyone who
+ * used it, per getAttributeUtilization) — short of it only when a user has no
+ * value on file for this dimension (e.g. no age bracket recorded). */
+export function AttributeStackedBar({ items }: { items: AttributeBucket[] }) {
   return (
-    <div className="flex flex-col gap-3.5">
-      {items.map((b) => (
-        <div key={b.label} className="flex items-center gap-3">
-          <span className="text-xs w-16 shrink-0">{b.label}</span>
-          <div className="grow h-2.5 rounded-full bg-surface-2 overflow-hidden">
-            <div className="h-full rounded-full bg-accent" style={{ width: `${b.rate}%` }} />
-          </div>
-          <span className="mono text-xs w-[30px] text-right">{b.rate}%</span>
-        </div>
-      ))}
+    <div className="flex flex-col gap-2.5">
+      <div className="flex h-3 rounded-full bg-surface-2 overflow-hidden">
+        {items.map(
+          (b, i) =>
+            b.rate > 0 && (
+              <div key={b.label} style={{ width: `${b.rate}%`, background: colorForSeries(b.label, i) }} />
+            )
+        )}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {items.map((b, i) => (
+          <span key={b.label} className="flex items-center gap-1.5 text-xs text-ink-soft">
+            <span
+              className="w-2 h-2 rounded-full inline-block shrink-0"
+              style={{ background: colorForSeries(b.label, i) }}
+            />
+            {b.label}
+            <span className="mono text-ink-faint">{b.rate}%</span>
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
 
-export function AttributeBarGrid({ items }: { items: AttributeBucket[] }) {
+/** 年代/性別/部署 shown together as stacked sub-sections instead of behind a
+ * dimension tab switcher — seeing only one attribute's ratio at a time hid the
+ * other two, and the ask was to see how usage splits across all of them. */
+export function AttributeBarSections({ buckets }: { buckets: Record<AttributeKind, AttributeBucket[]> }) {
   return (
-    <div className="grid gap-6" style={{ gridTemplateColumns: `repeat(${items.length}, 1fr)` }}>
-      {items.map((b) => (
-        <div key={b.label} className="flex flex-col gap-1.5">
-          <span className="text-xs text-ink-faint">{b.label}</span>
-          <div className="h-2.5 rounded-full bg-surface-2 overflow-hidden">
-            <div className="h-full rounded-full bg-accent" style={{ width: `${b.rate}%` }} />
-          </div>
-          <span className="mono text-[11px]">{b.rate}%</span>
+    <div className="flex flex-col gap-5">
+      {ALL_ATTRIBUTES.map((a) => (
+        <div key={a}>
+          <h4 className="text-[11px] text-ink-faint mb-2">{ATTRIBUTE_LABEL[a]}</h4>
+          <AttributeStackedBar items={buckets[a]} />
         </div>
       ))}
     </div>

@@ -1,10 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { shiftReference, type PeriodType } from "@/lib/period";
+import type { PeriodType } from "@/lib/period";
 import { withParams } from "@/lib/dashboard-url";
 import { AttributeCheckboxes } from "@/components/dashboard/attribute-checkboxes";
 import { logout } from "@/app/actions/auth";
+import { DatePicker } from "@/components/dashboard/date-picker";
 
 const PERIODS: { value: PeriodType; label: string }[] = [
   { value: "day", label: "日" },
@@ -116,19 +117,7 @@ export function DashboardShell({
                 </Link>
               ))}
             </div>
-            <div className="flex items-center justify-between gap-2 bg-surface-2 border border-border rounded-[10px] px-3.5 py-2 text-[13px] text-ink-soft w-[300px] shrink-0">
-              <Link scroll={false} href={hrefFor({ ref: shiftReference(period, refDate, -1) })} aria-label="前の期間" className="shrink-0">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4C5C6E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M15 18l-6-6 6-6" />
-                </svg>
-              </Link>
-              <span className="mono whitespace-nowrap">{rangeLabel}</span>
-              <Link scroll={false} href={hrefFor({ ref: shiftReference(period, refDate, 1) })} aria-label="次の期間" className="shrink-0">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4C5C6E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 18l6-6-6-6" />
-                </svg>
-              </Link>
-            </div>
+            <DatePicker period={period} refDate={refDate} rangeLabel={rangeLabel} basePath={basePath} params={params} />
           </div>
         </div>
 

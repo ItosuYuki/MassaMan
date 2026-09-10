@@ -4,6 +4,7 @@ import { notLike } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import * as schema from "./schema";
 import { departments, users, therapistProfiles, rooms, therapistShifts, reservations } from "./schema";
+import { isNonWorkingDay } from "../lib/holidays";
 
 const pgClient = postgres(process.env.DATABASE_URL!);
 const db = drizzle(pgClient, { schema });
@@ -92,11 +93,11 @@ const AGE_BRACKETS = ["20s", "30s", "40s", "50s_plus"] as const;
 type AgeBracketValue = (typeof AGE_BRACKETS)[number];
 const AGE_BRACKET_WEIGHT: Record<AgeBracketValue, number> = { "20s": 0.28, "30s": 0.34, "40s": 0.24, "50s_plus": 0.14 };
 
-const THERAPIST_SPECIALTIES: Record<string, { specialty: string; bio: string }> = {
-  T2001: { specialty: "肩こり・腰痛", bio: "施術歴8年。前職はスポーツトレーナー。" },
-  T2002: { specialty: "首・肩の張り", bio: "施術歴5年。" },
-  T2003: { specialty: "腰痛・姿勢改善", bio: "施術歴6年。" },
-  T2004: { specialty: "眼精疲労・肩こり", bio: "施術歴4年。午前中心の勤務。" },
+const THERAPIST_SPECIALTIES: Record<string, { specialties: string[]; bio: string; room: string }> = {
+  T2001: { specialties: ["肩こり", "腰痛"], bio: "施術歴8年。前職はスポーツトレーナー。", room: "第1マッサージ室" },
+  T2002: { specialties: ["首こり", "肩こり"], bio: "施術歴5年。", room: "第2マッサージ室" },
+  T2003: { specialties: ["腰痛", "姿勢改善"], bio: "施術歴6年。", room: "第1マッサージ室" },
+  T2004: { specialties: ["眼精疲労", "肩こり"], bio: "施術歴4年。午前中心の勤務。", room: "第2マッサージ室" },
 };
 
 const THERAPIST_SHIFTS: Record<string, { start: number; end: number; baseUtil: number; recentBoost: number }> = {
@@ -184,6 +185,7 @@ async function build() {
   const roomRows = ROOMS.map((name) => ({ id: crypto.randomUUID(), name }));
   await db.insert(rooms).values(roomRows);
   const roomIds = roomRows.map((r) => r.id);
+  const roomIdByName = new Map<string, string>(roomRows.map((r) => [r.name, r.id]));
 
   const passwordHash = await bcrypt.hash(TEST_PASSWORD, 10);
 
@@ -210,8 +212,8 @@ async function build() {
     if (acc.role === "therapist") {
       const profileId = crypto.randomUUID();
       therapistProfileIdByCode.set(acc.employeeCode, profileId);
-      const { specialty, bio } = THERAPIST_SPECIALTIES[acc.employeeCode];
-      therapistProfileRows.push({ id: profileId, userId, specialties: [specialty], bio });
+      const { specialties, bio, room } = THERAPIST_SPECIALTIES[acc.employeeCode];
+      therapistProfileRows.push({ id: profileId, userId, specialties, bio, roomId: roomIdByName.get(room) });
     }
   }
   await db.insert(users).values(namedUserRows);
@@ -261,9 +263,9 @@ async function build() {
     const scale = cfg.baseUtil / meanWeight;
 
     for (const d of dateRange(startDate, endDate)) {
-      if (pyWeekday(d) >= 5) continue; // weekends closed
-
       const dateStr = toISODate(d);
+      if (isNonWorkingDay(dateStr)) continue; // weekends & public holidays closed
+
       shiftRows.push({
         id: crypto.randomUUID(),
         therapistId,
