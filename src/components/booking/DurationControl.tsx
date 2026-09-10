@@ -5,14 +5,22 @@ const MIN_DURATION = 5;
 const MAX_DURATION = 45;
 const STEP = 5;
 
-export function DurationControl(props: { durationMinutes: number; onChange: (minutes: number) => void }) {
-  const { durationMinutes, onChange } = props;
+export function DurationControl(props: {
+  durationMinutes: number;
+  onChange: (minutes: number) => void;
+  slotSelected?: boolean;
+}) {
+  const { durationMinutes, onChange, slotSelected = false } = props;
 
   return (
     <div>
       <div className="mb-2 flex items-baseline justify-between">
         <span className="text-xs text-ink-faint">施術時間</span>
-        <span className="mono text-base font-bold text-accent-strong">
+        <span
+          className={`mono text-base font-bold text-accent-strong ${
+            slotSelected ? "sm:rounded-md sm:border sm:border-accent sm:px-2 sm:py-0.5" : ""
+          }`}
+        >
           {durationMinutes}
           <span className="text-[11px] font-normal text-ink-faint">分</span>
         </span>

@@ -1,7 +1,7 @@
 "use client";
 
 import type { AvailabilityDay } from "@/lib/booking/actions";
-import { formatTimeLabel } from "@/lib/booking/schedule";
+import { formatTimeLabel, formatDateWithWeekday } from "@/lib/booking/schedule";
 
 // "tooLate" (treatment would run past closing) renders identically to "unavailable" —
 // same ✕/予約不可 — the two are only distinguished internally.
@@ -81,7 +81,7 @@ export function AvailabilityGrid(props: {
         <div />
         {days.map((day) => (
           <div key={day.date} className="mono text-center text-[11px] text-ink-soft">
-            {day.date.slice(5).replace("-", "/")}
+            {formatDateWithWeekday(day.date)}
           </div>
         ))}
         {days[0]?.slots.map((_, tickIndex) => (

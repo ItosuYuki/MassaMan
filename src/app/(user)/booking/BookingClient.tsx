@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DateStrip } from "@/components/booking/DateStrip";
 import { AvailabilityGrid } from "@/components/booking/AvailabilityGrid";
 import { TherapistPanel, type TherapistMode } from "@/components/booking/TherapistPanel";
@@ -36,6 +36,7 @@ function genderFilterForMode(mode: TherapistMode): Gender[] {
 }
 
 export function BookingClient() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialDateParam = searchParams.get("date");
   const initialStartMinutesParam = searchParams.get("startMinutes");
@@ -158,29 +159,33 @@ export function BookingClient() {
     if (selectedStartMinutes === null || !assignedTherapistId) return;
     setConfirmError(null);
     startTransition(async () => {
-      const result = await createReservation({
-        date: selectedDate,
-        startMinutes: selectedStartMinutes,
-        durationMinutes,
-        therapistId: assignedTherapistId,
-        note: note || undefined,
-        autoAssigned: mode === "auto",
-      });
-      if (!result.ok) {
-        setConfirmError(result.error);
-        return;
+      try {
+        const result = await createReservation({
+          date: selectedDate,
+          startMinutes: selectedStartMinutes,
+          durationMinutes,
+          therapistId: assignedTherapistId,
+          note: note || undefined,
+          autoAssigned: mode === "auto",
+        });
+        if (!result.ok) {
+          setConfirmError(result.error);
+          return;
+        }
+        setConfirmStep("success");
+        setNote("");
+        refreshAvailability();
+      } catch {
+        // A dropped/errored request should never leave the dialog stuck on "予約しています…".
+        setConfirmError("通信に失敗しました。もう一度お試しください。");
       }
-      setConfirmStep("success");
-      setNote("");
-      refreshAvailability();
     });
   }
 
   function handleCloseConfirm() {
     setConfirmOpen(false);
     if (confirmStep === "success") {
-      setSelectedStartMinutes(null);
-      setCandidates([]);
+      router.push("/mypage");
     }
   }
 
@@ -188,17 +193,24 @@ export function BookingClient() {
     if (!cancelTarget) return;
     setCancelError(null);
     startCancelTransition(async () => {
-      const result = await cancelReservation(cancelTarget.reservationId);
-      if (!result.ok) {
-        setCancelError(result.error);
-        return;
+      try {
+        const result = await cancelReservation(cancelTarget.reservationId);
+        if (!result.ok) {
+          setCancelError(result.error);
+          return;
+        }
+        setCancelStep("success");
+        refreshAvailability();
+      } catch {
+        setCancelError("通信に失敗しました。もう一度お試しください。");
       }
-      setCancelStep("success");
-      refreshAvailability();
     });
   }
 
   const confirmTimeLabel = selectedStartMinutes !== null ? `${formatTimeLabel(selectedStartMinutes)}〜` : "";
+  const nextAvailableDate = new Date(currentWeekMonday);
+  nextAvailableDate.setDate(nextAvailableDate.getDate() + 7);
+  const nextAvailableDateLabel = formatDateWithWeekday(formatIsoDate(nextAvailableDate));
 
   return (
     <div className="flex flex-col gap-6 p-5 sm:flex-row sm:items-start sm:gap-0 sm:p-8">
@@ -220,7 +232,7 @@ export function BookingClient() {
             hasEligibleTherapist={hasEligibleTherapist}
             slotSelected={selectedStartMinutes !== null}
           />
-          <DurationControl durationMinutes={durationMinutes} onChange={setDurationMinutes} />
+          <DurationControl durationMinutes={durationMinutes} onChange={setDurationMinutes} slotSelected={selectedStartMinutes !== null} />
         </div>
         <AvailabilityGrid
           days={days}
@@ -239,13 +251,23 @@ export function BookingClient() {
             slotSelected={selectedStartMinutes !== null}
           />
         </div>
+        {selectedStartMinutes !== null && (
+          <div className="hidden sm:block">
+            <p className="mb-1 text-xs text-ink-faint">選択中の日時</p>
+            <p className="mono text-base font-bold text-accent-strong">
+              {formatDateWithWeekday(selectedDate)} {confirmTimeLabel}
+            </p>
+          </div>
+        )}
         <div className="hidden sm:block">
-          <DurationControl durationMinutes={durationMinutes} onChange={setDurationMinutes} />
+          <DurationControl durationMinutes={durationMinutes} onChange={setDurationMinutes} slotSelected={selectedStartMinutes !== null} />
         </div>
         <NoteField note={note} onChange={setNote} />
         <DressCodeNotice />
         {userHasReservationThisWeek && (
-          <p className="text-xs text-destructive">1週間に1回までしか予約できません。今週はすでに予約があります。</p>
+          <p className="text-xs text-destructive">
+            1週間に1回までしか予約できません。次回は{nextAvailableDateLabel}から予約できます。
+          </p>
         )}
         <ConfirmBar
           label={confirmTimeLabel}

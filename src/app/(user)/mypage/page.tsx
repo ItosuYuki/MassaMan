@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/dal";
 import { HeaderMenu } from "@/components/booking/HeaderMenu";
-import { LogoBadge } from "@/components/mypage/LogoBadge";
+import { PageHeaderBrand } from "@/components/mypage/PageHeaderBrand";
 import { FirstTimeGuide } from "@/components/mypage/FirstTimeGuide";
 import { CurrentReservationCard } from "@/components/mypage/CurrentReservationCard";
 import { RecommendationCard } from "@/components/mypage/RecommendationCard";
@@ -24,10 +24,7 @@ export default async function MyPage() {
   return (
     <main className="min-h-dvh bg-bg">
       <header className="flex items-center justify-between border-b border-border bg-surface px-5 py-4 sm:px-8">
-        <div className="flex items-center gap-2.5">
-          <LogoBadge size={32} />
-          <h1 className="text-lg">マイページ</h1>
-        </div>
+        <PageHeaderBrand title="マイページ" />
         <HeaderMenu />
       </header>
 
