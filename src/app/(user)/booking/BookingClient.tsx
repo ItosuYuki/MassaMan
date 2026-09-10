@@ -272,6 +272,7 @@ export function BookingClient() {
             <p className="mono text-base font-bold text-accent-strong">
               {formatDateWithWeekday(selectedDate)} {confirmTimeLabel}
             </p>
+            <p className="mono mt-1 text-xs text-ink-faint">施術時間 {durationMinutes}分</p>
           </div>
         )}
         <div className="hidden sm:block">
@@ -284,7 +285,6 @@ export function BookingClient() {
           </p>
         )}
         <ConfirmBar
-          label={confirmTimeLabel}
           disabled={selectedStartMinutes === null || !assignedTherapistId || userHasReservationThisWeek}
           onOpen={handleOpenConfirm}
         />
