@@ -201,6 +201,45 @@ export const notificationSettings = pgTable(
     enabled: boolean("enabled").notNull().default(true),
     minutesBefore: integer("minutes_before").notNull(), // 既定値：利用者30分／マッサージ師10分
     slackUserId: text("slack_user_id"),
+    reservationCreatedEnabled: boolean("reservation_created_enabled").notNull().default(true),
+    reservationCancelledEnabled: boolean("reservation_cancelled_enabled").notNull().default(true),
+    reminderEnabled: boolean("reminder_enabled").notNull().default(true),
   },
-  (table) => [index("idx_notification_settings_user_id").on(table.userId)]
+  (table) => [
+    index("idx_notification_settings_user_id").on(table.userId),
+    uniqueIndex("notification_settings_user_channel_key").on(table.userId, table.channel),
+  ]
+);
+
+// Slack OAuthで連携したワークスペースと個人ユーザーの対応
+export const slackConnections = pgTable(
+  "slack_connections",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: uuid("user_id").notNull().unique().references(() => users.id),
+    slackTeamId: text("slack_team_id").notNull(),
+    slackUserId: text("slack_user_id").notNull(),
+    connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("idx_slack_connections_team_user").on(table.slackTeamId, table.slackUserId)]
+);
+
+// 配信済み通知（in-app通知の表示元、および外部チャネルの監査ログ）
+export const notificationDeliveries = pgTable(
+  "notification_deliveries",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    userId: uuid("user_id").notNull().references(() => users.id),
+    reservationId: uuid("reservation_id").references(() => reservations.id),
+    channel: notificationChannelEnum("channel").notNull(),
+    eventType: text("event_type").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_notification_deliveries_user_created").on(table.userId, table.createdAt),
+    index("idx_notification_deliveries_reservation").on(table.reservationId),
+  ]
 );

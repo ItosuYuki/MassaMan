@@ -1,10 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { shiftReference, type PeriodType } from "@/lib/period";
 import { withParams } from "@/lib/dashboard-url";
 import { AttributeCheckboxes } from "@/components/dashboard/attribute-checkboxes";
-import { logout } from "@/app/actions/auth";
+import { AppSidebar } from "@/components/app-sidebar";
 
 const PERIODS: { value: PeriodType; label: string }[] = [
   { value: "day", label: "日" },
@@ -51,44 +50,7 @@ export function DashboardShell({
 
   return (
     <div className="min-h-dvh flex bg-bg">
-      {/* Sidebar */}
-      <div className="w-[220px] shrink-0 bg-surface border-r border-border flex flex-col py-6">
-        <div className="flex items-center gap-2.5 px-5 pb-5 border-b border-border mb-4">
-          <div className="w-[30px] h-[30px] rounded-[9px] overflow-hidden shrink-0">
-            <Image src="/icon.png" alt="マッサマン" width={30} height={30} className="w-full h-full object-cover" />
-          </div>
-          <span className="flex flex-col leading-tight">
-            <span className="font-sans font-[900] text-sm tracking-[-0.02em] text-ink">マッサマン</span>
-            <span className="font-heading text-[10px] text-ink-faint">Massage Manager</span>
-          </span>
-        </div>
-
-        <nav className="flex flex-col gap-0.5 px-3">
-          <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] text-[13px] font-medium bg-role-admin-soft text-role-admin">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 3v18h18M7 15l4-4 3 3 5-6" />
-            </svg>
-            利用率ダッシュボード
-          </div>
-        </nav>
-
-        <div className="grow" />
-
-        <div className="px-5 pt-4 border-t border-border flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-full bg-role-admin-soft flex items-center justify-center text-xs text-role-admin font-medium shrink-0">
-            管
-          </div>
-          <div className="min-w-0">
-            <div className="text-xs truncate">{adminName}</div>
-            <div className="text-[10px] text-ink-faint">施設管理担当</div>
-          </div>
-        </div>
-        <form action={logout} className="px-5 pt-3">
-          <button type="submit" className="text-[11px] text-destructive">
-            ログアウト
-          </button>
-        </form>
-      </div>
+      <AppSidebar role="admin" name={adminName} activePath={basePath} />
 
       {/* Main column */}
       <div className="grow flex flex-col overflow-hidden">
