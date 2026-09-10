@@ -31,7 +31,10 @@ export function CancelDialog(props: {
       <p className="mono mb-4 text-lg font-bold text-accent-strong">
         {props.dateLabel} {props.timeLabel}
       </p>
-      <p className="mb-5 text-sm text-ink">キャンセルしますか？</p>
+      <p className="mb-4 text-sm text-ink">キャンセルしますか？</p>
+      <div className="mb-5 rounded-xl border border-border bg-surface p-3.5 text-xs leading-relaxed text-ink-soft">
+        キャンセルすると、この枠は他の方が予約できるようになります。
+      </div>
       {props.error && <p className="mb-3 text-xs text-destructive">{props.error}</p>}
       <div className="flex gap-3">
         <button

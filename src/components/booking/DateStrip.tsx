@@ -46,8 +46,8 @@ export function DateStrip(props: {
                 isSelected ? "bg-accent text-white" : "bg-surface-2 text-ink-faint"
               }`}
             >
-              <span className="text-[11px]">{WEEKDAY_LABELS[date.getDay()]}</span>
-              <span className="mono text-sm">{date.getDate()}</span>
+              <span className="text-xs">{WEEKDAY_LABELS[date.getDay()]}</span>
+              <span className="mono text-lg font-bold">{date.getDate()}</span>
             </button>
           );
         })}
