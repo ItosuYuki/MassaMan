@@ -35,6 +35,14 @@ export function formatIsoDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+
+/** Formats an ISO date as "MM/DD（曜）", e.g. "2026-09-10" -> "09/10（木）". */
+export function formatDateWithWeekday(iso: string): string {
+  const weekday = WEEKDAY_LABELS[new Date(`${iso}T00:00:00`).getDay()];
+  return `${iso.slice(5).replace("-", "/")}（${weekday}）`;
+}
+
 /** Mon-Fri dates of the business week containing `anchor`. */
 export function getWeekDates(anchor: Date): Date[] {
   const day = anchor.getDay();

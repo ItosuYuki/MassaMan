@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import { DateStrip } from "@/components/booking/DateStrip";
 import { AvailabilityGrid } from "@/components/booking/AvailabilityGrid";
 import { TherapistPanel, type TherapistMode } from "@/components/booking/TherapistPanel";
@@ -10,7 +11,13 @@ import { ConfirmBar } from "@/components/booking/ConfirmBar";
 import { ConfirmDialog } from "@/components/booking/ConfirmDialog";
 import { CancelDialog } from "@/components/booking/CancelDialog";
 import { DressCodeNotice } from "@/components/booking/DressCodeNotice";
-import { getWeekDates, formatIsoDate, formatTimeLabel, isSlotInPast } from "@/lib/booking/schedule";
+import {
+  getWeekDates,
+  formatIsoDate,
+  formatTimeLabel,
+  formatDateWithWeekday,
+  isSlotInPast,
+} from "@/lib/booking/schedule";
 import {
   getAvailability,
   getTherapistCandidates,
@@ -28,22 +35,25 @@ function genderFilterForMode(mode: TherapistMode): Gender[] {
   return [];
 }
 
-const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
-
-function dateLabel(iso: string): string {
-  const weekday = WEEKDAY_LABELS[new Date(`${iso}T00:00:00`).getDay()];
-  return `${iso.slice(5).replace("-", "/")}（${weekday}）`;
-}
-
 export function BookingClient() {
+  const searchParams = useSearchParams();
+  const initialDateParam = searchParams.get("date");
+  const initialStartMinutesParam = searchParams.get("startMinutes");
+
   const today = useMemo(() => new Date(), []);
+  const initialAnchor = useMemo(
+    () => (initialDateParam ? new Date(`${initialDateParam}T00:00:00`) : today),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
   const currentWeekMonday = useMemo(() => getWeekDates(today)[0], [today]);
-  const [weekAnchor, setWeekAnchor] = useState(today);
+  const [weekAnchor, setWeekAnchor] = useState(initialAnchor);
   const weekDates = useMemo(() => getWeekDates(weekAnchor), [weekAnchor]);
   const canGoPrevWeek = weekDates[0] > currentWeekMonday;
 
-  const [selectedDate, setSelectedDate] = useState(formatIsoDate(today));
+  const [selectedDate, setSelectedDate] = useState(initialDateParam ?? formatIsoDate(today));
   const [selectedStartMinutes, setSelectedStartMinutes] = useState<number | null>(null);
+  const autoCancelTriedRef = useRef(false);
   const [days, setDays] = useState<AvailabilityDay[]>([]);
   const [userHasReservationThisWeek, setUserHasReservationThisWeek] = useState(false);
 
@@ -109,7 +119,25 @@ export function BookingClient() {
 
     setSelectedDate(date);
     setSelectedStartMinutes(startMinutes);
+    const isDesktop = window.matchMedia("(min-width: 640px)").matches;
+    window.scrollTo({
+      top: isDesktop ? 0 : document.documentElement.scrollHeight,
+      behavior: "smooth",
+    });
   }
+
+  // Arriving from mypage's "予約をキャンセル" link (?date=...&startMinutes=...): once that
+  // date's availability has loaded, open the same cancel dialog a manual slot-click would.
+  useEffect(() => {
+    if (autoCancelTriedRef.current || !initialStartMinutesParam || !initialDateParam) return;
+    const day = days.find((d) => d.date === initialDateParam);
+    if (!day) return;
+    autoCancelTriedRef.current = true;
+    const startMinutes = Number(initialStartMinutesParam);
+    const timer = setTimeout(() => handleSelectSlot(initialDateParam, startMinutes), 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days]);
 
   function handleSelectDate(iso: string) {
     const picked = new Date(`${iso}T00:00:00`);
@@ -229,7 +257,7 @@ export function BookingClient() {
       {confirmOpen && (
         <ConfirmDialog
           step={confirmStep}
-          dateLabel={dateLabel(selectedDate)}
+          dateLabel={formatDateWithWeekday(selectedDate)}
           timeLabel={confirmTimeLabel}
           durationMinutes={durationMinutes}
           note={note}
@@ -243,7 +271,7 @@ export function BookingClient() {
       {cancelTarget && (
         <CancelDialog
           step={cancelStep}
-          dateLabel={dateLabel(cancelTarget.date)}
+          dateLabel={formatDateWithWeekday(cancelTarget.date)}
           timeLabel={`${formatTimeLabel(cancelTarget.startMinutes)}〜`}
           pending={isCancelling}
           error={cancelError}

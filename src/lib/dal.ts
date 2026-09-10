@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getSession, type Role, type SessionPayload } from "@/lib/session";
 
 export const HOME_PATH_BY_ROLE: Record<Role, string> = {
-  user: "/booking",
+  user: "/mypage",
   therapist: "/schedule",
   admin: "/dashboard",
 };

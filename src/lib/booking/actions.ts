@@ -248,3 +248,55 @@ export async function getOwnReservationAt(
   );
   return match ? { id: match.id } : null;
 }
+
+export type MyReservation = {
+  id: string;
+  date: string;
+  startMinutes: number;
+  durationMinutes: number;
+};
+
+/**
+ * The current user's not-yet-past reservations, soonest first, for the mypage summary.
+ * Once the nearest one's time passes it naturally drops off this list (filtered by
+ * isSlotInPast), so the "current" reservation shown always rolls forward on its own.
+ */
+export async function getMyReservations(limit = 5): Promise<MyReservation[]> {
+  const session = await requireRole("user");
+  const { reservations } = getStore();
+  const now = new Date();
+
+  return reservations
+    .filter((r) => r.userEmployeeId === session.employeeId && !isSlotInPast(r.date, r.startMinutes, now))
+    .sort((a, b) => (a.date === b.date ? a.startMinutes - b.startMinutes : a.date < b.date ? -1 : 1))
+    .slice(0, limit)
+    .map(({ id, date, startMinutes, durationMinutes }) => ({ id, date, startMinutes, durationMinutes }));
+}
+
+/** Up to `limit` still-open start times today, from now onward — for the mypage recommendation card. */
+export async function getTodaysOpenSlots(limit = 2): Promise<number[]> {
+  await requireRole("user");
+  const totalRooms = ROOMS.length;
+  const { reservations } = getStore();
+  const now = new Date();
+  const todayIso = formatIsoDate(now);
+  const suggestionDuration = 30;
+
+  const dayReservations = reservations.filter((r) => r.date === todayIso);
+  const open: number[] = [];
+
+  for (const tick of getTimeSlots()) {
+    if (open.length >= limit) break;
+    const coveringTick = dayReservations.filter((r) => reservationCoversTick(r, tick));
+    const status = computeSlotStatus({
+      totalRooms,
+      bookedRoomCount: new Set(coveringTick.map((r) => r.roomId)).size,
+      isOwnReservation: false,
+      isPast: isSlotInPast(todayIso, tick, now),
+      wouldExceedClosing: tick + suggestionDuration > CLOSING_TIME_MINUTES,
+    });
+    if (status === "available") open.push(tick);
+  }
+
+  return open;
+}
