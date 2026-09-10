@@ -160,6 +160,12 @@ function sumReservationMinutes(reservations: ReservationRow[]): number {
   return reservations.reduce((sum, r) => sum + reservationMinutes(r), 0);
 }
 
+/** Sum of actual treatment minutes only (no CLEANUP_BUFFER_MINUTES) — for
+ * 平均施術時間, which is labeled as treatment time, not occupied-room time. */
+function sumTreatmentMinutes(reservations: ReservationRow[]): number {
+  return reservations.reduce((sum, r) => sum + minutesBetween(r.start_time, r.end_time), 0);
+}
+
 function rate(numerator: number, denominator: number): number {
   return denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
 }
@@ -195,7 +201,8 @@ export async function getOverallStats(range: DateRange, filters: AttributeFilter
     utilizationRate,
     reservationCount: reservations.length,
     distinctUsers: new Set(reservations.map((r) => r.user_id)).size,
-    avgDurationMinutes: reservations.length > 0 ? Math.round(bookedMinutes / reservations.length) : 0,
+    avgDurationMinutes:
+      reservations.length > 0 ? Math.round(sumTreatmentMinutes(reservations) / reservations.length) : 0,
   };
 }
 
@@ -292,15 +299,21 @@ export async function getUtilizationTrendByAttribute(
       const extra = { attribute, value: key };
       const previousBuckets = trendBuckets(period, previousRange);
       const points = await Promise.all(
-        buckets.map(async (b, i) => ({
-          label: b.label,
-          rate: rateOrNull(await countBookedMinutesInBucket(b, range, filters, therapistId, extra), available[i]),
-          previousRate: rateOrNull(
-            await countBookedMinutesInBucket(previousBuckets[i], previousRange, filters, therapistId, extra),
-            (await countMinutesInBucket(previousBuckets[i], previousRange, therapistId)).available,
-          ),
-          closed: b.closed,
-        }))
+        buckets.map(async (b, i) => {
+          const pb = previousBuckets[i];
+          const previousRate = pb
+            ? rateOrNull(
+                await countBookedMinutesInBucket(pb, previousRange, filters, therapistId, extra),
+                (await countMinutesInBucket(pb, previousRange, therapistId)).available
+              )
+            : null;
+          return {
+            label: b.label,
+            rate: rateOrNull(await countBookedMinutesInBucket(b, range, filters, therapistId, extra), available[i]),
+            previousRate,
+            closed: b.closed,
+          };
+        })
       );
       return { valueLabel: attributeLabel(attribute, key), points };
     })
@@ -578,9 +591,10 @@ function clientAttributeShare(reservations: ReservationRow[], attribute: Attribu
  * instead of re-querying per dimension. */
 export async function getAllClientAttributeShare(
   range: DateRange,
-  therapistId: string
+  therapistId: string,
+  filters: AttributeFilter = DEFAULT_FILTER
 ): Promise<Record<AttributeKind, AttributeBucket[]>> {
-  const reservations = await fetchReservations(range, DEFAULT_FILTER, therapistId);
+  const reservations = await fetchReservations(range, filters, therapistId);
   return {
     age: clientAttributeShare(reservations, "age"),
     gender: clientAttributeShare(reservations, "gender"),
@@ -652,7 +666,8 @@ export async function getTherapistSummary(
     overallAvgRate,
     reservationCount: reservations.length,
     distinctUsers,
-    avgDurationMinutes: reservations.length > 0 ? Math.round(bookedMinutes / reservations.length) : 0,
+    avgDurationMinutes:
+      reservations.length > 0 ? Math.round(sumTreatmentMinutes(reservations) / reservations.length) : 0,
   };
 }
 

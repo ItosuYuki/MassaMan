@@ -106,7 +106,9 @@ export default async function AdminDashboardPage({
   const isFiltered = filters.ageBracket.length > 0 || filters.gender.length > 0 || filters.department.length > 0;
   const trendDescription =
     lineValues.length > 0
-      ? "全体の利用率のうち、各属性が占める内訳です（合計すると全体利用率になります）"
+      ? isFiltered
+        ? "絞り込み対象の予約時間のうち、各属性が占める内訳です（分母は予約時間で、上部の「全体利用率」（利用した社員数の割合）とは算出方法が異なります）"
+        : "全体の利用率のうち、各属性が占める内訳です（合計すると全体利用率になります）"
       : isFiltered
         ? "絞り込み対象の社員のうち、利用した人数の割合の推移です"
         : "予約枠がどれくらい埋まっているか（稼働の割合）の推移です";
