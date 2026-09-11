@@ -16,6 +16,7 @@ const globalForDb = globalThis as unknown as { pgClient?: ReturnType<typeof post
 const pgClient =
   globalForDb.pgClient ??
   postgres(process.env.DATABASE_URL!, {
+    ssl: process.env.NODE_ENV === "production" ? "require" : undefined,
     types: {
       date: { to: 1082, from: [1082], serialize: (x: string) => x, parse: (x: string) => x },
       time: { to: 1083, from: [1083], serialize: (x: string) => x, parse: (x: string) => x },
