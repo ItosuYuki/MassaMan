@@ -9,6 +9,7 @@ import {
   DEFAULT_FILTER,
   OVERALL_ATTRIBUTE_VALUE,
   attributeFilterFromLineSelection,
+  sanitizeLineValues,
 } from "@/lib/attribute-filter";
 
 export { HOURS };
@@ -20,6 +21,7 @@ export {
   DEFAULT_FILTER,
   OVERALL_ATTRIBUTE_VALUE,
   attributeFilterFromLineSelection,
+  sanitizeLineValues,
 };
 
 type ShiftRow = { therapist_id: string; work_date: string; start_time: string; end_time: string };
@@ -293,6 +295,56 @@ export async function getUtilizationTrendByAttribute(
   );
 }
 
+export type TrendChartData = { trend: TrendPoint[] | null; series: AttributeTrendSeries[] };
+
+/**
+ * The trend panel's entire dataset for one page render: either the plain
+ * occupancy line (nothing checked) or the checked values' breakdown lines,
+ * with the 「全体」reference line prepended when that box is checked.
+ *
+ * The 全体 line is computed with DEFAULT_FILTER, never the page's `filters` —
+ * it means "the whole population" BY DEFINITION, so it must not move when
+ * other checked boxes narrow the page. Passing `filters` here is what made
+ * 全体+20代 draw the 20代 line twice (invisible reference line) and made the
+ * 全体 line's value depend on which other boxes were checked.
+ *
+ * Shared by both dashboard routes so the 全体 and per-therapist views cannot
+ * drift apart on any of this.
+ */
+export async function getTrendChartData({
+  period,
+  range,
+  previousRange,
+  lineAttr,
+  lineValues,
+  filters,
+  therapistId,
+}: {
+  period: PeriodType;
+  range: DateRange;
+  previousRange: DateRange;
+  lineAttr: AttributeKind;
+  lineValues: string[];
+  filters: AttributeFilter;
+  therapistId?: string;
+}): Promise<TrendChartData> {
+  if (lineValues.length === 0) {
+    return { trend: await getUtilizationTrend(period, range, previousRange, filters, therapistId), series: [] };
+  }
+
+  const attributeKeys = lineValues.filter((v) => v !== OVERALL_ATTRIBUTE_VALUE);
+  const [overall, byAttribute] = await Promise.all([
+    lineValues.includes(OVERALL_ATTRIBUTE_VALUE)
+      ? getUtilizationTrend(period, range, previousRange, DEFAULT_FILTER, therapistId).then(overallAttributeSeries)
+      : null,
+    attributeKeys.length > 0
+      ? getUtilizationTrendByAttribute(period, range, previousRange, lineAttr, filters, therapistId, attributeKeys)
+      : [],
+  ]);
+
+  return { trend: null, series: [...(overall ? [overall] : []), ...byAttribute] };
+}
+
 /** Booked minutes within one bucket, narrowed to reservations matching `extra`
  * (and any active top-filter) — the numerator for getUtilizationTrendByAttribute. */
 async function countBookedMinutesInBucket(
@@ -363,8 +415,18 @@ async function countMinutesInBucket(
 
 export type ShiftBreakdownPoint = {
   label: string;
+  // Rounded independently to the nearest 0.1h for their own display — do NOT
+  // add these back together for a total. Since each is rounded separately,
+  // their sum can drift from the true total by up to ~0.1h (e.g. 0.75h and
+  // 0.25h independently round to 0.8h and 0.3h, summing to 1.1h though the
+  // real total is 1.0h). Use `totalHours` for the total and for sizing the
+  // bar; these two are for the in-bar labels only.
   bookedHours: number | null;
   vacantHours: number | null;
+  // Rounded from the raw available-minutes figure directly, not from
+  // bookedHours + vacantHours, so it reflects the true total rather than
+  // accumulated rounding error from the two independently-rounded halves.
+  totalHours: number | null;
   closed: boolean;
 };
 
@@ -390,6 +452,7 @@ export async function getShiftBreakdownTrend(
         label: b.label,
         bookedHours: available > 0 ? Math.round(Math.min(booked, available) / 6) / 10 : null,
         vacantHours: available > 0 ? Math.round(Math.max(0, available - booked) / 6) / 10 : null,
+        totalHours: available > 0 ? Math.round(available / 6) / 10 : null,
         closed: b.closed,
       };
     })

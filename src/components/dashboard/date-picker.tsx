@@ -83,9 +83,9 @@ export function DatePicker({
           type="button"
           onClick={() => go({ ref: shiftReference(period, refDate, -1) })}
           aria-label="前の期間"
-          className="shrink-0"
+          className="shrink-0 text-ink-soft hover:text-ink"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4C5C6E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
@@ -94,9 +94,9 @@ export function DatePicker({
           type="button"
           onClick={() => go({ ref: shiftReference(period, refDate, 1) })}
           aria-label="次の期間"
-          className="shrink-0"
+          className="shrink-0 text-ink-soft hover:text-ink"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4C5C6E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 18l6-6-6-6" />
           </svg>
         </button>
@@ -111,7 +111,7 @@ export function DatePicker({
             </button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-[280px]">
-            <div className="flex items-center gap-1.5 flex-wrap mb-3">
+            <div className="flex items-center justify-center gap-1.5 flex-wrap mb-3">
               {PRESETS.filter((p) => p.period === period).map((p) => (
                 <Button
                   key={p.label}

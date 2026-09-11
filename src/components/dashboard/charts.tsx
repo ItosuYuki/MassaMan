@@ -30,9 +30,11 @@ const LINE_COLORS = [
  * alongside 性別 — role-user (also blue-family) read too similar to accent for
  * a 2-line comparison, so 女性 is pinned to the destructive red instead of
  * cycling through LINE_COLORS by position. 全体 (the optional whole-population
- * reference line) is pinned to the default blue accent. */
+ * reference line) gets role-admin: it is drawn ALONGSIDE the per-value lines,
+ * so it needs a color no dimension's first value can take — accent is already
+ * 20代/男性/開発部, and sharing it made the reference line invisible. */
 const VALUE_COLORS: Record<string, string> = {
-  全体: "var(--color-series-overall)",
+  全体: "var(--color-role-admin)",
   男性: "var(--color-accent)",
   女性: "var(--color-destructive)",
   未回答: "var(--color-amber)",
@@ -200,26 +202,37 @@ function LineChart({
   );
 }
 
+/** A dashed swatch is drawn as a dotted border rather than a solid bar so the
+ * legend actually distinguishes the 前期間 line from the 今期間 one — they
+ * share a color, and the dash is the only thing telling them apart. */
+function LegendSwatch({ color, dashed = false }: { color: string; dashed?: boolean }) {
+  return dashed ? (
+    <span className="w-2.5 inline-block border-t-2 border-dotted" style={{ borderColor: color }} />
+  ) : (
+    <span className="w-2.5 h-0.5 rounded-sm inline-block" style={{ background: color }} />
+  );
+}
+
 /** Renders its own legend in the same spot AttributeTrendChart does (right
  * after the panel's description paragraph, before the chart) so the legend
  * never jumps position when the admin toggles the attribute checkboxes. */
 export function UtilizationTrendChart({ points, showPrevious }: { points: TrendPoint[]; showPrevious: boolean }) {
   const series: { values: (number | null)[]; color: string; dashed?: boolean }[] = [
-    { values: points.map((p) => p.currentRate), color: "var(--color-series-overall)" },
+    { values: points.map((p) => p.currentRate), color: "var(--color-accent)" },
   ];
   if (showPrevious) {
-    series.push({ values: points.map((p) => p.previousRate), color: "var(--color-series-overall)", dashed: true });
+    series.push({ values: points.map((p) => p.previousRate), color: "var(--color-accent)", dashed: true });
   }
   return (
     <div className="flex flex-col grow">
       <div className="flex items-center gap-3 mb-2 text-[11px] text-ink-faint">
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-0.5 rounded-sm inline-block" style={{ background: "var(--color-series-overall)" }} />
+          <LegendSwatch color="var(--color-accent)" />
           今期間
         </span>
         {showPrevious && (
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-0.5 rounded-sm inline-block" style={{ background: "var(--color-series-overall)" }} />
+            <LegendSwatch color="var(--color-accent)" dashed />
             前期間
           </span>
         )}
@@ -230,7 +243,9 @@ export function UtilizationTrendChart({ points, showPrevious }: { points: TrendP
 }
 
 /** Multiple attribute-value lines overlaid for direct comparison (e.g. 男性 vs
- * 女性), each against its OWN group's headcount — see getUtilizationTrendByAttribute. */
+ * 女性), each the slice of the overall occupancy rate attributable to that
+ * value — same shift-minute denominator for every line, so the lines of one
+ * dimension sum back to the 全体 line. See getUtilizationTrendByAttribute. */
 export function AttributeTrendChart({ series, showPrevious }: { series: AttributeTrendSeries[]; showPrevious: boolean }) {
   if (series.length === 0) return null;
   const labels = series[0].points.map((p) => p.label);
@@ -250,10 +265,16 @@ export function AttributeTrendChart({ series, showPrevious }: { series: Attribut
       <div className="flex items-center gap-3 flex-wrap mb-2">
         {series.map((s, i) => (
           <span key={s.valueLabel} className="flex items-center gap-1.5 text-[11px] text-ink-faint">
-            <span className="w-2.5 h-0.5 rounded-sm inline-block" style={{ background: colorForSeries(s.valueLabel, i) }} />
+            <LegendSwatch color={colorForSeries(s.valueLabel, i)} />
             {s.valueLabel}
           </span>
         ))}
+        {lineSeries.some((s) => s.dashed) && (
+          <span className="flex items-center gap-1.5 text-[11px] text-ink-faint">
+            <LegendSwatch color="var(--color-ink-faint)" dashed />
+            前期間
+          </span>
+        )}
       </div>
       <LineChart series={lineSeries} labels={labels} closed={closed} />
     </div>
@@ -264,11 +285,19 @@ export function AttributeTrendChart({ series, showPrevious }: { series: Attribut
  * treatment time) stacked with 空き時間 (vacant) into one bar per bucket —
  * a 空き時間-only bar told only half the story (vacant relative to what?);
  * stacking both onto the shift-time axis they actually share answers that. */
+// Layout constants for the bar column below (all pixels, matching the row's
+// fixed h-[150px]). The bar's height is computed from these fixed constants
+// rather than from a percentage of a flex container that also holds the
+// labels — otherwise two equal `total`s could render at different heights
+// depending on how many labels happen to surround each one, since flexbox's
+// shrink-to-fit reacts to sibling content.
+const TOTAL_LABEL_RESERVE_PX = 18; // matching the h-[18px] total-value row above the chart area
+const CHART_AREA_PX = 150 - TOTAL_LABEL_RESERVE_PX;
+const LABEL_SLOT_PX = 19; // one segment label's rendered footprint (~16px) plus a small gap
+const BAR_AREA_PX = CHART_AREA_PX - 2 * LABEL_SLOT_PX; // headroom for up to 2 stacked segment labels
+
 export function ShiftBreakdownChart({ points }: { points: ShiftBreakdownPoint[] }) {
-  const max = Math.max(
-    1,
-    ...points.flatMap((p) => (p.bookedHours === null || p.vacantHours === null ? [] : [p.bookedHours + p.vacantHours]))
-  );
+  const max = Math.max(1, ...points.flatMap((p) => (p.totalHours === null ? [] : [p.totalHours])));
 
   return (
     <div className="flex flex-col grow">
@@ -278,47 +307,113 @@ export function ShiftBreakdownChart({ points }: { points: ShiftBreakdownPoint[] 
           稼働時間
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "var(--color-accent)", opacity: 0.35 }} />
+          <span
+            className="w-2.5 h-2.5 rounded-sm inline-block border border-border"
+            style={{ background: "var(--color-surface-2)" }}
+          />
           空き時間
         </span>
       </div>
       <div className="flex flex-col grow px-[3%]">
         <div className="h-[150px] flex items-end gap-2 border-b border-border overflow-hidden">
           {points.map((p, i) => {
-            // Round the sum too — adding two already-rounded-to-0.1 floats
-            // (e.g. 18.1 + 18.0) can itself land on a binary float that isn't
-            // exactly 36.1, printing as "36.099999999999994".
-            const total =
-              p.bookedHours !== null && p.vacantHours !== null
-                ? Math.round((p.bookedHours + p.vacantHours) * 10) / 10
-                : null;
+            // `total` drives the bar's height and MUST come from the true
+            // available-minutes figure (totalHours), not from bookedHours +
+            // vacantHours — those two are each independently rounded to the
+            // nearest 0.1h for their own labels, so their sum can drift from
+            // the real total by up to ~0.1h (e.g. 0.8h + 0.3h even though the
+            // real split was 0.75h/0.25h out of a true 1.0h total).
+            const total = p.totalHours;
+            // The two segments' labels are already-rounded values (see above),
+            // so they don't necessarily add up to `total` — split the bar by
+            // their OWN sum instead, so the two colored rects still always
+            // fill exactly 100% of the bar's box regardless of that drift.
+            const labelSum = (p.bookedHours ?? 0) + (p.vacantHours ?? 0);
+            // The bar's own height is a pure function of (total, max) in FIXED
+            // pixels, not a flex/percentage size — if it were a percentage of a
+            // flex container that also holds the labels, two equal `total`s could
+            // render at different heights depending on how many labels happen to
+            // surround each one (flexbox's shrink-to-fit kicking in differently
+            // per column). BAR_AREA_PX reserves enough headroom above the tallest
+            // possible bar for up to two stacked segment labels (see below) so
+            // labels are never clipped by the row's overflow-hidden.
+            const barPx = total ? (total / max) * BAR_AREA_PX : 0;
+            const vacantPx = labelSum ? ((p.vacantHours ?? 0) / labelSum) * barPx : 0;
+            const bookedPx = labelSum ? ((p.bookedHours ?? 0) / labelSum) * barPx : 0;
+            const vacantShown = !p.closed && total !== null && total > 0 && p.vacantHours !== null && p.vacantHours > 0;
+            const bookedShown = !p.closed && total !== null && total > 0 && p.bookedHours !== null && p.bookedHours > 0;
+            // 稼働時間's label normally floats directly above its own segment (the
+            // vacant/booked boundary). But when 空き時間 is too thin to leave room
+            // for it there, it would land on top of 空き時間's own label above the
+            // bar — so in that case it stacks above 空き時間's label instead,
+            // guaranteeing the two labels never overlap regardless of how thin
+            // either segment is.
+            const bookedStacked = bookedShown && vacantPx < LABEL_SLOT_PX;
             return (
-              <div key={i} className="relative flex flex-col items-center justify-end gap-1.5 flex-1 min-w-0 h-full">
+              <div key={i} className="relative flex flex-col flex-1 min-w-0 h-full">
                 {p.closed && <div className="absolute inset-0 -mx-1 bg-ink-faint/10" />}
-                {total !== null && (
-                  <span className="relative mono text-[10px] text-ink-faint w-full text-center truncate">{total}h</span>
-                )}
-                {total !== null && total > 0 && (
-                  <div
-                    className="relative w-full max-w-[26px] rounded-t overflow-hidden flex flex-col"
-                    style={{ height: `${(total / max) * 100}%` }}
-                  >
+                <div className="h-[18px] flex items-center justify-center">
+                  {total !== null && (
+                    <span className="relative mono text-[10px] text-ink-faint max-w-full text-center truncate">{total}h</span>
+                  )}
+                </div>
+                <div className="relative w-full" style={{ height: `${CHART_AREA_PX}px` }}>
+                  {total !== null && total > 0 && (
                     <div
+                      className="absolute left-1/2 bottom-0 w-full max-w-[26px] -translate-x-1/2"
+                      style={{ height: `${barPx}px` }}
+                    >
+                      {/* Colored segments live in their own clipped layer so the
+                          rounded top corner still clips cleanly even though labels
+                          are free to spill outside the bar's own box. */}
+                      <div className="absolute inset-0 rounded-t overflow-hidden flex flex-col border border-border">
+                        <div
+                          style={{
+                            height: `${labelSum ? ((p.vacantHours ?? 0) / labelSum) * 100 : 0}%`,
+                            background: p.closed ? "var(--color-ink-faint)" : "var(--color-surface-2)",
+                            opacity: p.closed ? 0.25 : 1,
+                          }}
+                        />
+                        <div
+                          className="border-t border-border"
+                          style={{
+                            height: `${labelSum ? ((p.bookedHours ?? 0) / labelSum) * 100 : 0}%`,
+                            background: p.closed ? "var(--color-ink-faint)" : "var(--color-accent)",
+                            opacity: p.closed ? 0.25 : 1,
+                          }}
+                        />
+                      </div>
+                      {bookedShown && !bookedStacked && (
+                        <span
+                          className="absolute left-1/2 -translate-x-1/2 mono text-[9px] leading-[14px] whitespace-nowrap rounded border bg-surface px-1"
+                          style={{ bottom: `${bookedPx + 2}px`, borderColor: "var(--color-accent)", color: "var(--color-accent)" }}
+                        >
+                          {p.bookedHours}h
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {vacantShown && (
+                    <span
+                      className="absolute left-1/2 -translate-x-1/2 mono text-[9px] leading-[14px] whitespace-nowrap rounded border border-border bg-surface px-1"
+                      style={{ bottom: `${barPx + 2}px`, color: "var(--color-ink-soft)" }}
+                    >
+                      {p.vacantHours}h
+                    </span>
+                  )}
+                  {bookedStacked && (
+                    <span
+                      className="absolute left-1/2 -translate-x-1/2 mono text-[9px] leading-[14px] whitespace-nowrap rounded border bg-surface px-1"
                       style={{
-                        height: `${(p.vacantHours! / total) * 100}%`,
-                        background: p.closed ? "var(--color-ink-faint)" : "var(--color-accent)",
-                        opacity: p.closed ? 0.25 : 0.35,
+                        bottom: `${barPx + (vacantShown ? LABEL_SLOT_PX : 0) + 2}px`,
+                        borderColor: "var(--color-accent)",
+                        color: "var(--color-accent)",
                       }}
-                    />
-                    <div
-                      style={{
-                        height: `${(p.bookedHours! / total) * 100}%`,
-                        background: p.closed ? "var(--color-ink-faint)" : "var(--color-accent)",
-                        opacity: p.closed ? 0.25 : 1,
-                      }}
-                    />
-                  </div>
-                )}
+                    >
+                      {p.bookedHours}h
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })}

@@ -60,7 +60,7 @@ class SeededRandom {
 const DEPARTMENTS = ["開発部", "営業部", "総務部", "その他"] as const;
 const DEPARTMENT_WEIGHT: Record<string, number> = { 開発部: 0.42, 営業部: 0.27, 総務部: 0.18, その他: 0.13 };
 
-const ROOMS = ["第1マッサージ室", "第2マッサージ室"];
+const ROOMS = ["本社ビル4F マッサージルーム"];
 
 type NamedAccount = {
   employeeCode: string;
@@ -94,10 +94,10 @@ type AgeBracketValue = (typeof AGE_BRACKETS)[number];
 const AGE_BRACKET_WEIGHT: Record<AgeBracketValue, number> = { "20s": 0.28, "30s": 0.34, "40s": 0.24, "50s_plus": 0.14 };
 
 const THERAPIST_SPECIALTIES: Record<string, { specialties: string[]; bio: string; room: string }> = {
-  T2001: { specialties: ["肩こり", "腰痛"], bio: "施術歴8年。前職はスポーツトレーナー。", room: "第1マッサージ室" },
-  T2002: { specialties: ["首こり", "肩こり"], bio: "施術歴5年。", room: "第2マッサージ室" },
-  T2003: { specialties: ["腰痛", "姿勢改善"], bio: "施術歴6年。", room: "第1マッサージ室" },
-  T2004: { specialties: ["眼精疲労", "肩こり"], bio: "施術歴4年。午前中心の勤務。", room: "第2マッサージ室" },
+  T2001: { specialties: ["肩こり", "腰痛"], bio: "施術歴8年。前職はスポーツトレーナー。", room: "本社ビル4F マッサージルーム" },
+  T2002: { specialties: ["首こり", "肩こり"], bio: "施術歴5年。", room: "本社ビル4F マッサージルーム" },
+  T2003: { specialties: ["腰痛", "姿勢改善"], bio: "施術歴6年。", room: "本社ビル4F マッサージルーム" },
+  T2004: { specialties: ["眼精疲労", "肩こり"], bio: "施術歴4年。午前中心の勤務。", room: "本社ビル4F マッサージルーム" },
 };
 
 const THERAPIST_SHIFTS: Record<string, { start: number; end: number; baseUtil: number; recentBoost: number }> = {
@@ -303,7 +303,7 @@ async function build() {
         roomBusy.set(busyKey, busy);
         const availableRooms = roomIds.filter((r) => !busy.has(r));
         // All rooms already booked this hour (can happen: up to 4 therapists'
-        // shifts overlap 9am-1pm against only 2 rooms) — skip rather than
+        // shifts overlap 9am-1pm against only 1 room) — skip rather than
         // force a double-booking, which would violate the DB's
         // no_overlap_per_room EXCLUDE constraint.
         if (availableRooms.length === 0) continue;
