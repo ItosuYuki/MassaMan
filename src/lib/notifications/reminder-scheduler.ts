@@ -1,5 +1,5 @@
 import "server-only";
-import { getStore } from "@/lib/booking/mock-data";
+import { listConfirmedReservationsForEmployeeCode } from "@/lib/booking/repo";
 import { formatTimeLabel } from "@/lib/booking/schedule";
 import { getAllEnabledPreferences } from "./store";
 import { sendSlackMessage } from "./slack";
@@ -15,12 +15,11 @@ function appointmentDate(dateIso: string, startMinutes: number): Date {
   return d;
 }
 
-function checkReminders() {
-  const { reservations } = getStore();
+async function checkReminders() {
   const now = new Date();
 
   for (const [employeeId, prefs] of getAllEnabledPreferences()) {
-    const userReservations = reservations.filter((r) => r.userEmployeeId === employeeId);
+    const userReservations = await listConfirmedReservationsForEmployeeCode(employeeId);
 
     for (const reservation of userReservations) {
       const apptAt = appointmentDate(reservation.date, reservation.startMinutes);
@@ -47,5 +46,7 @@ function checkReminders() {
 export function startReminderScheduler() {
   const globalForScheduler = globalThis as unknown as { __reminderInterval?: ReturnType<typeof setInterval> };
   if (globalForScheduler.__reminderInterval) return;
-  globalForScheduler.__reminderInterval = setInterval(checkReminders, POLL_INTERVAL_MS);
+  globalForScheduler.__reminderInterval = setInterval(() => {
+    checkReminders().catch((err) => console.error("[reminder-scheduler]", err));
+  }, POLL_INTERVAL_MS);
 }

@@ -26,7 +26,7 @@ import {
   type AvailabilityDay,
   type TherapistOption,
 } from "@/lib/booking/actions";
-import type { Gender } from "@/lib/booking/mock-data";
+import type { Gender } from "@/lib/booking/repo";
 
 function genderFilterForMode(mode: TherapistMode): Gender[] {
   if (mode === "male") return ["male"];

@@ -16,26 +16,31 @@ import { computeSlotStatus, type SlotStatus } from "./availability";
 import { computeOccupancyRate } from "./occupancy";
 import { autoAssignTherapist, type TherapistCandidate } from "./auto-assign";
 import {
-  getStore,
-  nextReservationId,
-  nextReviewId,
-  ROOMS,
-  THERAPISTS,
   type Gender,
-  type Reservation,
-  type Review,
-} from "./mock-data";
+  type ReservationRow,
+  getUserIdByEmployeeCode,
+  countRooms,
+  listTherapists,
+  listConfirmedReservationsForDates,
+  listConfirmedReservationsForUser,
+  getReservationById,
+  insertReservation,
+  cancelReservationById,
+  getReviewForReservation,
+  getReviewsForReservations,
+  insertReview,
+} from "./repo";
 import { sendSlackMessage } from "@/lib/notifications/slack";
 
 /** Post-treatment cleanup buffer: nobody else may book this therapist/room for this long after. */
 const CLEANUP_BUFFER_MINUTES = 15;
 
-function occupiedRange(r: Pick<Reservation, "startMinutes" | "durationMinutes">) {
+function occupiedRange(r: Pick<ReservationRow, "startMinutes" | "durationMinutes">) {
   return { start: r.startMinutes, end: r.startMinutes + r.durationMinutes + CLEANUP_BUFFER_MINUTES };
 }
 
 /** Whether a reservation's occupied range (treatment + cleanup buffer) overlaps a 15-min tick. */
-function reservationCoversTick(r: Pick<Reservation, "startMinutes" | "durationMinutes">, tick: number): boolean {
+function reservationCoversTick(r: Pick<ReservationRow, "startMinutes" | "durationMinutes">, tick: number): boolean {
   const { start, end } = occupiedRange(r);
   return start < tick + SLOT_STEP_MINUTES && tick < end;
 }
@@ -61,17 +66,18 @@ export async function getAvailability(
   durationMinutes: number
 ): Promise<AvailabilityResult> {
   const session = await requireRole("user");
+  const userId = await getUserIdByEmployeeCode(session.employeeId);
   const anchor = new Date(`${weekStartIso}T00:00:00`);
   const weekDates = getWeekDates(anchor);
   const weekDateIsos = weekDates.map(formatIsoDate);
   const timeSlots = getTimeSlots();
-  const totalRooms = ROOMS.length;
-  const { reservations } = getStore();
+  const totalRooms = await countRooms();
+  const weekReservations = await listConfirmedReservationsForDates(weekDateIsos);
   const now = new Date();
 
   const days = weekDates.map((date) => {
     const dateIso = formatIsoDate(date);
-    const dayReservations = reservations.filter((r) => r.date === dateIso);
+    const dayReservations = weekReservations.filter((r) => r.date === dateIso);
 
     const slots = timeSlots.map((tick) => {
       const coveringTick = dayReservations.filter((r) => reservationCoversTick(r, tick));
@@ -79,7 +85,7 @@ export async function getAvailability(
       const status = computeSlotStatus({
         totalRooms,
         bookedRoomCount,
-        isOwnReservation: coveringTick.some((r) => r.userEmployeeId === session.employeeId),
+        isOwnReservation: coveringTick.some((r) => r.userId === userId),
         isPast: isSlotInPast(dateIso, tick, now),
         // Treatment itself (not the cleanup buffer after it) must finish by closing.
         wouldExceedClosing: tick + durationMinutes > CLOSING_TIME_MINUTES,
@@ -90,9 +96,7 @@ export async function getAvailability(
     return { date: dateIso, slots };
   });
 
-  const userHasReservationThisWeek = reservations.some(
-    (r) => r.userEmployeeId === session.employeeId && weekDateIsos.includes(r.date)
-  );
+  const userHasReservationThisWeek = weekReservations.some((r) => r.userId === userId);
 
   return { days, userHasReservationThisWeek };
 }
@@ -117,30 +121,29 @@ export async function getTherapistCandidates(
   const targetAnchor = new Date(`${date}T00:00:00`);
   const weekDates = getWeekDates(targetAnchor).map(formatIsoDate);
   const hoursPerDay = BUSINESS_HOURS.end - BUSINESS_HOURS.start + 1;
-  const { reservations } = getStore();
+  const therapists = await listTherapists();
+  const weekReservations = await listConfirmedReservationsForDates(weekDates);
 
   const requestedEnd = startMinutes + durationMinutes + CLEANUP_BUFFER_MINUTES;
-  const dayReservations = reservations.filter((r) => r.date === date);
+  const dayReservations = weekReservations.filter((r) => r.date === date);
+  const overlapping = dayReservations.filter((r) => {
+    const { start, end } = occupiedRange(r);
+    return rangesOverlap(start, end, startMinutes, requestedEnd);
+  });
 
-  const busyTherapistIds = new Set(
-    dayReservations
-      .filter((r) => {
-        const { start, end } = occupiedRange(r);
-        return rangesOverlap(start, end, startMinutes, requestedEnd);
-      })
-      .map((r) => r.therapistId)
-  );
+  const busyTherapistIds = new Set(overlapping.map((r) => r.therapistId));
+  // Two therapists can share a fixed room, so one being busy makes the room (and thus
+  // the other therapist assigned to it) unavailable too, even with no direct conflict.
+  const busyRoomIds = new Set(overlapping.map((r) => r.roomId).filter((id): id is string => id !== null));
 
-  const options: TherapistOption[] = THERAPISTS.map((t) => {
-    const reservationCountInWeek = reservations.filter(
-      (r) => r.therapistId === t.id && weekDates.includes(r.date)
-    ).length;
+  const options: TherapistOption[] = therapists.map((t) => {
+    const reservationCountInWeek = weekReservations.filter((r) => r.therapistId === t.id).length;
     return {
       id: t.id,
       name: t.name,
       gender: t.gender,
       specialty: t.specialty,
-      isAvailable: !busyTherapistIds.has(t.id),
+      isAvailable: !busyTherapistIds.has(t.id) && !(t.roomId !== null && busyRoomIds.has(t.roomId)),
       occupancyRate: computeOccupancyRate({
         reservationCountInWeek,
         businessDaysPerWeek: BUSINESS_DAYS.length,
@@ -170,7 +173,7 @@ export async function createReservation(input: {
   autoAssigned: boolean;
 }): Promise<{ ok: true; reservationId: string } | { ok: false; error: string }> {
   const session = await requireRole("user");
-  const store = getStore();
+  const userId = await getUserIdByEmployeeCode(session.employeeId);
 
   if (isSlotInPast(input.date, input.startMinutes, new Date())) {
     return { ok: false, error: "過去の日時は予約できません。" };
@@ -181,78 +184,73 @@ export async function createReservation(input: {
   }
 
   const requestedWeekIsos = getWeekDates(new Date(`${input.date}T00:00:00`)).map(formatIsoDate);
-  const alreadyBookedThisWeek = store.reservations.some(
-    (r) => r.userEmployeeId === session.employeeId && requestedWeekIsos.includes(r.date)
-  );
+  const weekReservations = await listConfirmedReservationsForDates(requestedWeekIsos);
+  const alreadyBookedThisWeek = weekReservations.some((r) => r.userId === userId);
   if (alreadyBookedThisWeek) {
     return { ok: false, error: "1週間に1回までしか予約できません。" };
   }
 
-  const therapist = THERAPISTS.find((t) => t.id === input.therapistId);
+  const therapists = await listTherapists();
+  const therapist = therapists.find((t) => t.id === input.therapistId);
   if (!therapist) {
     return { ok: false, error: "指定された施術者が見つかりません。" };
   }
 
   const requestedEnd = input.startMinutes + input.durationMinutes + CLEANUP_BUFFER_MINUTES;
-  const dayReservations = store.reservations.filter((r) => r.date === input.date);
+  const dayReservations = weekReservations.filter((r) => r.date === input.date);
   const overlapping = dayReservations.filter((r) => {
     const { start, end } = occupiedRange(r);
     return rangesOverlap(start, end, input.startMinutes, requestedEnd);
   });
 
   const therapistAlreadyBooked = overlapping.some((r) => r.therapistId === therapist.id);
-  if (therapistAlreadyBooked) {
+  const roomAlreadyBooked = therapist.roomId !== null && overlapping.some((r) => r.roomId === therapist.roomId);
+  if (therapistAlreadyBooked || roomAlreadyBooked) {
     return { ok: false, error: "この枠は埋まりました。別の枠を選んでください。" };
   }
 
-  const bookedRoomIds = new Set(overlapping.map((r) => r.roomId));
-  const freeRoom = ROOMS.find((room) => !bookedRoomIds.has(room.id));
-  if (!freeRoom) {
+  let reservationId: string;
+  try {
+    reservationId = await insertReservation({
+      userId,
+      therapistId: therapist.id,
+      roomId: therapist.roomId,
+      date: input.date,
+      startMinutes: input.startMinutes,
+      durationMinutes: input.durationMinutes,
+      note: input.note ?? "",
+    });
+  } catch {
+    // Defense in depth against a race condition the DB's own EXCLUDE constraints catch.
     return { ok: false, error: "この枠は埋まりました。別の枠を選んでください。" };
   }
-
-  const reservation: Reservation = {
-    id: nextReservationId(),
-    userEmployeeId: session.employeeId,
-    userName: session.name,
-    therapistId: therapist.id,
-    roomId: freeRoom.id,
-    date: input.date,
-    startMinutes: input.startMinutes,
-    durationMinutes: input.durationMinutes,
-    note: input.note ?? "",
-    autoAssigned: input.autoAssigned,
-    createdAt: Date.now(),
-  };
-  store.reservations.push(reservation);
 
   sendSlackMessage(
     `📅 予約が入りました：${session.name} さん ${input.date} ${formatTimeLabel(input.startMinutes)}〜` +
       `（${therapist.name}・${input.durationMinutes}分）`
   );
 
-  return { ok: true, reservationId: reservation.id };
+  return { ok: true, reservationId };
 }
 
 export async function cancelReservation(
   reservationId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await requireRole("user");
-  const store = getStore();
+  const userId = await getUserIdByEmployeeCode(session.employeeId);
 
-  const index = store.reservations.findIndex((r) => r.id === reservationId);
-  if (index === -1) {
+  const reservation = await getReservationById(reservationId);
+  if (!reservation) {
     return { ok: false, error: "予約が見つかりません。" };
   }
-  const cancelled = store.reservations[index];
-  if (cancelled.userEmployeeId !== session.employeeId) {
+  if (reservation.userId !== userId) {
     return { ok: false, error: "この予約をキャンセルする権限がありません。" };
   }
 
-  store.reservations.splice(index, 1);
+  await cancelReservationById(reservationId);
 
   sendSlackMessage(
-    `🗑️ 予約がキャンセルされました：${session.name} さん ${cancelled.date} ${formatTimeLabel(cancelled.startMinutes)}〜`
+    `🗑️ 予約がキャンセルされました：${session.name} さん ${reservation.date} ${formatTimeLabel(reservation.startMinutes)}〜`
   );
 
   return { ok: true };
@@ -264,10 +262,9 @@ export async function getOwnReservationAt(
   startMinutes: number
 ): Promise<{ id: string } | null> {
   const session = await requireRole("user");
-  const { reservations } = getStore();
-  const match = reservations.find(
-    (r) => r.date === date && r.userEmployeeId === session.employeeId && reservationCoversTick(r, startMinutes)
-  );
+  const userId = await getUserIdByEmployeeCode(session.employeeId);
+  const dayReservations = await listConfirmedReservationsForDates([date]);
+  const match = dayReservations.find((r) => r.userId === userId && reservationCoversTick(r, startMinutes));
   return match ? { id: match.id } : null;
 }
 
@@ -286,11 +283,12 @@ export type MyReservation = {
  */
 export async function getMyReservations(limit = 5): Promise<MyReservation[]> {
   const session = await requireRole("user");
-  const { reservations } = getStore();
+  const userId = await getUserIdByEmployeeCode(session.employeeId);
+  const all = await listConfirmedReservationsForUser(userId);
   const now = new Date();
 
-  return reservations
-    .filter((r) => r.userEmployeeId === session.employeeId && !isSlotInPast(r.date, r.startMinutes, now))
+  return all
+    .filter((r) => !isSlotInPast(r.date, r.startMinutes, now))
     .sort((a, b) => (a.date === b.date ? a.startMinutes - b.startMinutes : a.date < b.date ? -1 : 1))
     .slice(0, limit)
     .map(({ id, date, startMinutes, durationMinutes, note }) => ({ id, date, startMinutes, durationMinutes, note }));
@@ -307,27 +305,32 @@ export type HistoryEntry = MyReservation & {
 /** The current user's past reservations, most recent first, for the mypage treatment history. */
 export async function getMyReservationHistory(limit = 5): Promise<HistoryEntry[]> {
   const session = await requireRole("user");
-  const { reservations, reviews } = getStore();
+  const userId = await getUserIdByEmployeeCode(session.employeeId);
+  const all = await listConfirmedReservationsForUser(userId);
   const now = new Date();
 
-  return reservations
-    .filter((r) => r.userEmployeeId === session.employeeId && isSlotInPast(r.date, r.startMinutes, now))
+  const past = all
+    .filter((r) => isSlotInPast(r.date, r.startMinutes, now))
     .sort((a, b) => (a.date === b.date ? b.startMinutes - a.startMinutes : a.date < b.date ? 1 : -1))
-    .slice(0, limit)
-    .map((r) => {
-      const therapist = THERAPISTS.find((t) => t.id === r.therapistId);
-      const review = reviews.find((rv) => rv.reservationId === r.id);
-      return {
-        id: r.id,
-        date: r.date,
-        startMinutes: r.startMinutes,
-        durationMinutes: r.durationMinutes,
-        note: r.note,
-        therapistName: therapist?.name ?? "不明",
-        therapistSpecialty: therapist?.specialty ?? "",
-        review: review ? { rating: review.rating, comment: review.comment } : null,
-      };
-    });
+    .slice(0, limit);
+
+  const therapists = await listTherapists();
+  const reviewsById = await getReviewsForReservations(past.map((r) => r.id));
+
+  return past.map((r) => {
+    const therapist = therapists.find((t) => t.id === r.therapistId);
+    const review = reviewsById.get(r.id);
+    return {
+      id: r.id,
+      date: r.date,
+      startMinutes: r.startMinutes,
+      durationMinutes: r.durationMinutes,
+      note: r.note,
+      therapistName: therapist?.name ?? "不明",
+      therapistSpecialty: therapist?.specialty ?? "",
+      review: review ? { rating: review.rating, comment: review.comment ?? "" } : null,
+    };
+  });
 }
 
 /**
@@ -341,34 +344,31 @@ export async function submitReview(
   comment: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await requireRole("user");
-  const store = getStore();
+  const userId = await getUserIdByEmployeeCode(session.employeeId);
 
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
     return { ok: false, error: "評価は1〜5の範囲で選択してください。" };
   }
 
-  const reservation = store.reservations.find((r) => r.id === reservationId);
+  const reservation = await getReservationById(reservationId);
   if (!reservation) {
     return { ok: false, error: "予約が見つかりません。" };
   }
-  if (reservation.userEmployeeId !== session.employeeId) {
+  if (reservation.userId !== userId) {
     return { ok: false, error: "この予約にレビューを投稿する権限がありません。" };
   }
   if (!isSlotInPast(reservation.date, reservation.startMinutes, new Date())) {
     return { ok: false, error: "施術が完了してからレビューを投稿できます。" };
   }
-  if (store.reviews.some((r) => r.reservationId === reservationId)) {
+  if (await getReviewForReservation(reservationId)) {
     return { ok: false, error: "この予約にはすでにレビューが投稿されています。" };
   }
 
-  const review: Review = {
-    id: nextReviewId(),
-    reservationId,
-    rating,
-    comment,
-    createdAt: Date.now(),
-  };
-  store.reviews.push(review);
+  try {
+    await insertReview(reservationId, rating, comment);
+  } catch {
+    return { ok: false, error: "この予約にはすでにレビューが投稿されています。" };
+  }
 
   return { ok: true };
 }
@@ -384,8 +384,7 @@ export type OpenSlot = { date: string; startMinutes: number };
  */
 export async function getUpcomingOpenSlots(limit = 2): Promise<OpenSlot[]> {
   await requireRole("user");
-  const totalRooms = ROOMS.length;
-  const { reservations } = getStore();
+  const totalRooms = await countRooms();
   const now = new Date();
   const suggestionDuration = 30;
 
@@ -400,11 +399,13 @@ export async function getUpcomingOpenSlots(limit = 2): Promise<OpenSlot[]> {
     }
   }
 
+  const dateIsos = candidateDates.map(formatIsoDate);
+  const allReservations = await listConfirmedReservationsForDates(dateIsos);
+
   const open: OpenSlot[] = [];
-  for (const date of candidateDates) {
+  for (const dateIso of dateIsos) {
     if (open.length >= limit) break;
-    const dateIso = formatIsoDate(date);
-    const dayReservations = reservations.filter((r) => r.date === dateIso);
+    const dayReservations = allReservations.filter((r) => r.date === dateIso);
 
     for (const tick of getTimeSlots()) {
       if (open.length >= limit) break;
