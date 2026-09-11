@@ -49,6 +49,13 @@ body {
   color: var(--color-ink);
 }
 
+/* Slightly larger overall type on desktop-width screens (matches this app's own sm: breakpoint). */
+@media (min-width: 640px) {
+  html {
+    font-size: 17px;
+  }
+}
+
 h1, h2, h3 {
   font-family: var(--font-heading);
 }

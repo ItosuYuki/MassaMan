@@ -21,7 +21,7 @@ export async function login(
     return { error: "社員番号とパスワードを入力してください。" };
   }
 
-  const employee = findEmployeeByCode(employeeId);
+  const employee = await findEmployeeByCode(employeeId);
   const passwordMatches = employee
     ? await bcrypt.compare(password, employee.passwordHash)
     : false;
