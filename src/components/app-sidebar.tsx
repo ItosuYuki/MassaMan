@@ -3,10 +3,13 @@ import Link from "next/link";
 import { AccountMenu } from "@/components/account-menu";
 import type { Role } from "@/lib/session";
 
-const NAV_ITEMS: Record<Role, { href: string; label: string; icon: "calendar" | "chart" }[]> = {
+const NAV_ITEMS: Record<Role, { href: string; label: string; icon: "calendar" | "chart" | "users" }[]> = {
   user: [{ href: "/booking", label: "予約", icon: "calendar" }],
   therapist: [{ href: "/schedule", label: "スケジュール", icon: "calendar" }],
-  admin: [{ href: "/dashboard", label: "利用率ダッシュボード", icon: "chart" }],
+  admin: [
+    { href: "/dashboard", label: "利用率ダッシュボード", icon: "chart" },
+    { href: "/therapists", label: "マッサージ師管理", icon: "users" },
+  ],
 };
 
 const ACTIVE_CLASSES: Record<Role, string> = {
@@ -35,6 +38,8 @@ export function AppSidebar({ role, name, activePath }: { role: Role; name: strin
             <Link key={item.href} href={item.href} className={`flex items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-[13px] ${active ? `${ACTIVE_CLASSES[role]} font-medium` : "text-ink-soft hover:bg-bg"}`}>
               {item.icon === "chart" ? (
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 3v18h18M7 15l4-4 3 3 5-6" /></svg>
+              ) : item.icon === "users" ? (
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="8" r="4" /><path d="M4 20c0-3 2-5 4-5h8c2 0 4 2 4 5" /></svg>
               ) : (
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
               )}
