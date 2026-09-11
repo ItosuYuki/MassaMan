@@ -68,7 +68,6 @@ CREATE TABLE therapist_profiles (
   specialties text[],  -- 得意分野（肩こり・腰痛 等）
   bio         text,    -- 経歴（施術歴・前職・保有資格など）
   photo_url   text,
-  room_id     uuid,    -- 担当する部屋（固定割当）。REFERENCES rooms(id) は rooms 定義後に追加
   is_active   boolean NOT NULL DEFAULT true -- 休職中等に false
 );
 
@@ -108,9 +107,6 @@ CREATE TABLE rooms (
   id   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL -- 第1マッサージ室／第2マッサージ室
 );
-
-ALTER TABLE therapist_profiles ADD CONSTRAINT therapist_profiles_room_id_fkey
-  FOREIGN KEY (room_id) REFERENCES rooms(id);
 
 -- ---------------------------------------------------------------------------
 -- reservations (予約) — 最重要テーブル
