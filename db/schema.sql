@@ -1,11 +1,15 @@
 -- マッサマン (Massage Manager) — PostgreSQL schema
 --
+-- Historical record of the original schema design. The implementation's actual
+-- source of truth is now src/db/schema.ts (Drizzle ORM) — see
+-- docs/superpowers/specs/2026-09-10-postgres-migration-design.md. This file is
+-- no longer applied directly (drizzle-kit generates the real migrations under
+-- drizzle/); kept here so the original design rationale stays discoverable.
+--
 -- Implements the design decided in database-auth-design.md:
 --   - employee-ID + bcrypt-hashed password auth, cookie session (app-layer, not in this schema)
 --   - double-booking prevention via DB-level exclusion constraints (not app-code checks)
 --   - anonymity rule: DB always holds full data; masking happens in the API response layer
---
--- Apply with: psql "$DATABASE_URL" -f db/schema.sql
 
 BEGIN;
 
@@ -64,6 +68,7 @@ CREATE TABLE therapist_profiles (
   specialties text[],  -- 得意分野（肩こり・腰痛 等）
   bio         text,    -- 経歴（施術歴・前職・保有資格など）
   photo_url   text,
+  room_id     uuid,    -- 担当する部屋（固定割当）。REFERENCES rooms(id) は rooms 定義後に追加
   is_active   boolean NOT NULL DEFAULT true -- 休職中等に false
 );
 
@@ -105,6 +110,9 @@ CREATE TABLE rooms (
   id   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL -- ベッドA／ベッドB／ベッドC
 );
+
+ALTER TABLE therapist_profiles ADD CONSTRAINT therapist_profiles_room_id_fkey
+  FOREIGN KEY (room_id) REFERENCES rooms(id);
 
 -- ---------------------------------------------------------------------------
 -- reservations (予約) — 最重要テーブル

@@ -1,40 +1,40 @@
 import "server-only";
-import { DatabaseSync } from "node:sqlite";
-import fs from "node:fs";
-import path from "node:path";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import * as schema from "@/db/schema";
 
-const DB_PATH = path.join(process.cwd(), "mock-db", "mock_directory.sqlite3");
-
-if (!fs.existsSync(DB_PATH)) {
-  throw new Error(
-    `Mock database not found at ${DB_PATH}. Generate it with:\n` +
-      "  pip install bcrypt\n" +
-      "  python3 mock-db/build_mock_directory.py"
-  );
-}
+const globalForDb = globalThis as unknown as { pgClient?: ReturnType<typeof postgres> };
 
 /**
- * The mock-db SQLite database (see mock-db/build_mock_directory.py and
- * docs/database-auth-design.md). A local stand-in for the real PostgreSQL schema in
- * db/schema.sql — writable, since reservation cancellation and notification settings
- * (see src/lib/reservations.ts, src/lib/notifications.ts) need to persist changes here.
+ * date/time columns are pinned to plain strings (instead of postgres.js's
+ * default JS Date parsing for `date`) so dashboard-data.ts's existing
+ * comparison logic (lexicographic string comparisons on ISO dates,
+ * `split(":")` on times) keeps working unchanged after the SQLite -> Postgres
+ * migration. Cached on globalThis so Next.js dev-mode hot reloads reuse the
+ * same connection instead of leaking a new one per reload.
  */
-export const db = new DatabaseSync(DB_PATH);
+const pgClient =
+  globalForDb.pgClient ??
+  postgres(process.env.DATABASE_URL!, {
+    types: {
+      date: { to: 1082, from: [1082], serialize: (x: string) => x, parse: (x: string) => x },
+      time: { to: 1083, from: [1083], serialize: (x: string) => x, parse: (x: string) => x },
+    },
+  });
 
-/**
- * Runs `fn` inside a BEGIN/COMMIT, rolling back on any thrown error.
- * `node:sqlite`'s DatabaseSync has no built-in transaction wrapper (unlike
- * better-sqlite3's `.transaction()`), so multi-statement writes need this to
- * avoid leaving a delete-then-failed-insert half-applied.
- */
-export function runInTransaction<T>(fn: () => T): T {
-  db.exec("BEGIN");
-  try {
-    const result = fn();
-    db.exec("COMMIT");
-    return result;
-  } catch (err) {
-    db.exec("ROLLBACK");
-    throw err;
-  }
+if (process.env.NODE_ENV !== "production") {
+  globalForDb.pgClient = pgClient;
 }
+
+/** Drizzle instance (query builder) — used by src/lib/employees.ts. */
+export const db = drizzle(pgClient, { schema });
+
+/** Raw postgres.js tagged-template client — used by src/lib/dashboard-data.ts
+ * for its dynamic, hand-composed aggregation SQL (see
+ * docs/superpowers/specs/2026-09-10-postgres-migration-design.md §3). */
+export const sql = pgClient;
+
+/** The type of `db`, and of the transaction-scoped client Drizzle passes into
+ * `db.transaction(async (tx) => ...)` — shift/break writes that must commit
+ * or roll back together take this instead of the module-level `db` directly. */
+export type DbClient = typeof db;

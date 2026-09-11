@@ -1,5 +1,7 @@
 import "server-only";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { users } from "@/db/schema";
 import type { Role } from "@/lib/session";
 
 export type Employee = {
@@ -9,26 +11,26 @@ export type Employee = {
   passwordHash: string;
 };
 
-type UserRow = {
-  employee_code: string;
-  name: string;
-  role: string;
-  password_hash: string;
-};
+export async function findEmployeeByCode(employeeId: string): Promise<Employee | null> {
+  const rows = await db
+    .select({
+      employeeCode: users.employeeCode,
+      name: users.name,
+      role: users.role,
+      passwordHash: users.passwordHash,
+    })
+    .from(users)
+    .where(and(eq(users.employeeCode, employeeId), eq(users.isActive, true)))
+    .limit(1);
 
-const FIND_BY_CODE = db.prepare(
-  "SELECT employee_code, name, role, password_hash FROM users WHERE employee_code = ? AND is_active = 1"
-);
-
-export function findEmployeeByCode(employeeId: string): Employee | null {
-  const row = FIND_BY_CODE.get(employeeId) as UserRow | undefined;
+  const row = rows[0];
   if (!row) return null;
 
   return {
-    employeeId: row.employee_code,
+    employeeId: row.employeeCode,
     name: row.name,
-    role: row.role as Role,
-    passwordHash: row.password_hash,
+    role: row.role,
+    passwordHash: row.passwordHash,
   };
 }
 
