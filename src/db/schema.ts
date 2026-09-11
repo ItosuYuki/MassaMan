@@ -30,6 +30,7 @@ export const reservationStatusEnum = pgEnum("reservation_status", [
   "no_show",
 ]);
 export const notificationChannelEnum = pgEnum("notification_channel", ["in_app", "email", "slack"]);
+export const therapistBreakKindEnum = pgEnum("therapist_break_kind", ["break", "unavailable"]);
 
 // ---------------------------------------------------------------------------
 // departments
@@ -103,8 +104,12 @@ export const therapistShifts = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// therapist_breaks (休憩時間) — not queried yet, but part of the decided schema
+// therapist_breaks (休憩・その他の不可時間)
 // ---------------------------------------------------------------------------
+//
+// kind distinguishes a plain 休憩 from an その他 (unavailable) run so
+// getDaySchedule can tell them apart on read; label holds the その他 run's
+// free-text reason (null for 休憩, and for an その他 run with no reason given).
 
 export const therapistBreaks = pgTable(
   "therapist_breaks",
@@ -115,6 +120,8 @@ export const therapistBreaks = pgTable(
       .references(() => therapistShifts.id),
     breakStart: time("break_start").notNull(),
     breakEnd: time("break_end").notNull(),
+    kind: therapistBreakKindEnum("kind").notNull().default("break"),
+    label: text("label"),
   },
   (table) => [index("idx_therapist_breaks_shift_id").on(table.shiftId)]
 );
@@ -125,7 +132,7 @@ export const therapistBreaks = pgTable(
 
 export const rooms = pgTable("rooms", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(), // 本社ビル4F マッサージルーム
+  name: text("name").notNull(), // ベッドA／ベッドB／ベッドC
 });
 
 // ---------------------------------------------------------------------------

@@ -95,7 +95,10 @@ matches reality before relying on it, since it will keep drifting as more featur
   `requireRole`, the Data Access Layer per Next.js's own auth guidance), `db.ts` (opens a
   `postgres.js` connection to the local Docker-run PostgreSQL, wrapped in Drizzle ORM —
   see `src/db/schema.ts` for the schema and `docker-compose.yml` for the local server),
-  `employees.ts` (`findEmployeeByCode`, queries that database — see below).
+  `employees.ts` (`findEmployeeByCode`, queries that database — see below), `booking/data.ts`
+  (the reservation/review data-access + business logic for the user booking flow, same
+  database), `reservations.ts`/`shifts.ts`/`shift-slots.ts` (the therapist-facing schedule
+  screen's equivalent layer).
 - `src/proxy.ts` — Next.js 16 renamed `middleware.js` to `proxy.js`; does the optimistic
   (cookie-only) auth redirect. Per-route/Server Action checks still happen via `dal.ts` — Next's
   own docs are explicit that Proxy alone is not sufficient.
@@ -114,7 +117,10 @@ matches reality before relying on it, since it will keep drifting as more featur
   design).
 - **Session**: signed (HS256, `jose`), stored in an `httpOnly` cookie. Secret comes from
   `SESSION_SECRET` in `.env.local` (see `.env.example`; generate with `openssl rand -base64 32`).
-- Feature backlog beyond auth (the actual booking/schedule/dashboard screens, notification
-  delivery) remains tracked as separate GitHub issues (#5–#12 in the `ItosuYuki/Ningyo` repo
-  history) to be designed per-feature. `db/schema.sql` is designed and verified (see its own
-  commit and `docs/database-auth-design.md`) but nothing beyond auth reads from it yet.
+- Reservation creation (issue #6) is implemented and reads/writes the same PostgreSQL
+  database via `src/lib/booking/repo.ts` — rooms are fixed per therapist
+  (`therapist_profiles.room_id`), not chosen freely per booking. The rest of the
+  booking/schedule/dashboard screens remain separate GitHub issues (#5, #7–#12 in the
+  `ItosuYuki/Ningyo` repo history) to be designed per-feature. `db/schema.sql` is designed
+  and verified (see its own commit and `docs/database-auth-design.md`); `src/db/schema.ts`
+  is the Drizzle source of truth it was ported from.
