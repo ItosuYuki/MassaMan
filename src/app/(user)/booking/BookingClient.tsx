@@ -25,8 +25,8 @@ import {
   getOwnReservationAt,
   type AvailabilityDay,
   type TherapistOption,
-} from "@/lib/booking/actions";
-import type { Gender } from "@/lib/booking/repo";
+  type Gender,
+} from "@/lib/booking/data";
 
 function genderFilterForMode(mode: TherapistMode): Gender[] {
   if (mode === "male") return ["male"];
@@ -132,11 +132,6 @@ export function BookingClient() {
 
     setSelectedDate(date);
     setSelectedStartMinutes(startMinutes);
-    const isDesktop = window.matchMedia("(min-width: 640px)").matches;
-    window.scrollTo({
-      top: isDesktop ? 0 : document.documentElement.scrollHeight,
-      behavior: "smooth",
-    });
   }
 
   // Arriving from mypage's "予約をキャンセル" link (?date=...&startMinutes=...): once that

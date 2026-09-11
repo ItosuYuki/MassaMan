@@ -1,21 +1,19 @@
 import { Suspense } from "react";
 import { requireRole } from "@/lib/dal";
+import { AppSidebar } from "@/components/app-sidebar";
 import { BookingClient } from "./BookingClient";
-import { HeaderMenu } from "@/components/booking/HeaderMenu";
-import { PageHeaderBrand } from "@/components/mypage/PageHeaderBrand";
 
 export default async function BookingPage() {
-  await requireRole("user");
+  const session = await requireRole("user");
 
   return (
-    <main className="min-h-dvh bg-bg">
-      <header className="flex items-center justify-between border-b border-border bg-surface px-5 py-4 sm:px-8">
-        <PageHeaderBrand />
-        <HeaderMenu />
-      </header>
-      <Suspense>
-        <BookingClient />
-      </Suspense>
-    </main>
+    <div className="flex h-dvh overflow-hidden bg-bg">
+      <AppSidebar role="user" name={session.name} activePath="/booking" />
+      <main className="grow overflow-y-auto">
+        <Suspense>
+          <BookingClient />
+        </Suspense>
+      </main>
+    </div>
   );
 }

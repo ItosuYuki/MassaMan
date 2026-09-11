@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { HistoryEntry } from "@/lib/booking/actions";
+import type { HistoryEntry } from "@/lib/booking/data";
 import { TreatmentHistoryList } from "./TreatmentHistoryList";
 
 export function TreatmentHistoryCard({ history }: { history: HistoryEntry[] }) {

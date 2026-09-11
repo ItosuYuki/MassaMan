@@ -1,6 +1,6 @@
 "use client";
 
-import type { AvailabilityDay } from "@/lib/booking/actions";
+import type { AvailabilityDay } from "@/lib/booking/data";
 import { formatTimeLabel, formatDateWithWeekday } from "@/lib/booking/schedule";
 
 // "tooLate" (treatment would run past closing) renders identically to "unavailable" —

@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { notLike } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import * as schema from "./schema";
-import { departments, users, therapistProfiles, rooms, therapistShifts, reservations, notificationSettings } from "./schema";
+import { departments, users, therapistProfiles, rooms, therapistShifts, reservations, reviews } from "./schema";
 import { isNonWorkingDay } from "../lib/holidays";
 
 const pgClient = postgres(process.env.DATABASE_URL!);
@@ -60,7 +60,7 @@ class SeededRandom {
 const DEPARTMENTS = ["開発部", "営業部", "総務部", "その他"] as const;
 const DEPARTMENT_WEIGHT: Record<string, number> = { 開発部: 0.42, 営業部: 0.27, 総務部: 0.18, その他: 0.13 };
 
-const ROOMS = ["第1マッサージ室", "第2マッサージ室"];
+const ROOMS = ["ベッドA", "ベッドB", "ベッドC"];
 
 type NamedAccount = {
   employeeCode: string;
@@ -94,18 +94,10 @@ type AgeBracketValue = (typeof AGE_BRACKETS)[number];
 const AGE_BRACKET_WEIGHT: Record<AgeBracketValue, number> = { "20s": 0.28, "30s": 0.34, "40s": 0.24, "50s_plus": 0.14 };
 
 const THERAPIST_SPECIALTIES: Record<string, { specialties: string[]; bio: string; room: string }> = {
-  T2001: { specialties: ["肩こり", "腰痛"], bio: "施術歴8年。前職はスポーツトレーナー。", room: "第1マッサージ室" },
-  T2002: { specialties: ["首こり", "肩こり"], bio: "施術歴5年。", room: "第2マッサージ室" },
-  T2003: { specialties: ["腰痛", "姿勢改善"], bio: "施術歴6年。", room: "第1マッサージ室" },
-  T2004: { specialties: ["眼精疲労", "肩こり"], bio: "施術歴4年。午前中心の勤務。", room: "第2マッサージ室" },
-};
-
-// Default notification channel/lead-time per role, mirroring the old mock-db's
-// NOTIFICATION_DEFAULTS (mock-db/build_mock_directory.py).
-const NOTIFICATION_DEFAULTS: Record<NamedAccount["role"], { channel: "in_app" | "slack"; minutesBefore: number }> = {
-  user: { channel: "in_app", minutesBefore: 30 },
-  therapist: { channel: "slack", minutesBefore: 10 },
-  admin: { channel: "in_app", minutesBefore: 30 },
+  T2001: { specialties: ["肩こり", "腰痛"], bio: "施術歴8年。前職はスポーツトレーナー。", room: "ベッドA" },
+  T2002: { specialties: ["首こり", "肩こり"], bio: "施術歴5年。", room: "ベッドB" },
+  T2003: { specialties: ["腰痛", "姿勢改善"], bio: "施術歴6年。", room: "ベッドC" },
+  T2004: { specialties: ["眼精疲労", "肩こり"], bio: "施術歴4年。午前中心の勤務。", room: "ベッドA" },
 };
 
 const THERAPIST_SHIFTS: Record<string, { start: number; end: number; baseUtil: number; recentBoost: number }> = {
@@ -179,6 +171,11 @@ async function insertReservationsInChunks(rows: (typeof reservations.$inferInser
     await db.insert(reservations).values(rows.slice(i, i + chunkSize));
   }
 }
+async function insertReviewsInChunks(rows: (typeof reviews.$inferInsert)[], chunkSize = 500) {
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    await db.insert(reviews).values(rows.slice(i, i + chunkSize));
+  }
+}
 
 async function build() {
   console.log("Truncating existing tables...");
@@ -241,20 +238,6 @@ async function build() {
   }));
   await db.insert(users).values(syntheticUserRows);
   const syntheticUserIds = syntheticUserRows.map((u) => u.id!);
-
-  const notificationSettingsRows: (typeof notificationSettings.$inferInsert)[] = [
-    ...namedUserRows.map((u) => ({
-      id: crypto.randomUUID(),
-      userId: u.id!,
-      ...NOTIFICATION_DEFAULTS[NAMED_ACCOUNTS.find((a) => a.employeeCode === u.employeeCode)!.role],
-    })),
-    ...syntheticUserRows.map((u) => ({
-      id: crypto.randomUUID(),
-      userId: u.id!,
-      ...NOTIFICATION_DEFAULTS.user,
-    })),
-  ];
-  await db.insert(notificationSettings).values(notificationSettingsRows);
 
   const allUserIds = [
     ...NAMED_ACCOUNTS.filter((a) => a.role === "user").map((a) => userIdByCode.get(a.employeeCode)!),
@@ -325,7 +308,7 @@ async function build() {
         roomBusy.set(busyKey, busy);
         const availableRooms = roomIds.filter((r) => !busy.has(r));
         // All rooms already booked this hour (can happen: up to 4 therapists'
-        // shifts overlap 9am-1pm against only 2 rooms) — skip rather than
+        // shifts overlap 9am-1pm against only 3 rooms) — skip rather than
         // force a double-booking, which would violate the DB's
         // no_overlap_per_room EXCLUDE constraint.
         if (availableRooms.length === 0) continue;
@@ -357,11 +340,36 @@ async function build() {
   console.log(`Inserting ${reservationRows.length} reservations...`);
   await insertReservationsInChunks(reservationRows);
 
+  // A small deterministic review set keeps the admin management screen useful
+  // immediately after seeding while preserving the same anonymous data shape
+  // as production reviews (the management query exposes departments only).
+  const reviewComments = [
+    "肩と首の張りが楽になりました。的確に凝りをほぐしてくれます。",
+    "丁寧な施術で安心できました。時間通りに終わるのも良いです。",
+    "腰の重さが改善しました。次回もぜひお願いしたいです。",
+    "力加減を確認しながら進めてくれて、とてもリラックスできました。",
+  ];
+  const reviewCountByTherapist = new Map<string, number>();
+  const reviewRows: (typeof reviews.$inferInsert)[] = [];
+  for (const reservation of reservationRows) {
+    if (reservation.status !== "completed") continue;
+    const count = reviewCountByTherapist.get(reservation.therapistId) ?? 0;
+    if (count >= 12) continue;
+    reviewCountByTherapist.set(reservation.therapistId, count + 1);
+    reviewRows.push({
+      id: crypto.randomUUID(),
+      reservationId: reservation.id!,
+      rating: [5, 4, 5, 5, 4][reviewRows.length % 5],
+      comment: reviewComments[reviewRows.length % reviewComments.length],
+    });
+  }
+  console.log(`Inserting ${reviewRows.length} reviews...`);
+  await insertReviewsInChunks(reviewRows);
+
   console.log(
     `Seeded: ${DEPARTMENTS.length} departments, ${namedUserRows.length + syntheticUserRows.length} users ` +
       `(${syntheticUserRows.length} synthetic), ${ROOMS.length} rooms, ${shiftRows.length} shifts, ` +
-      `${reservationRows.length} reservations, ${notificationSettingsRows.length} notification settings ` +
-      `(${toISODate(startDate)} to ${toISODate(endDate)}).`
+      `${reservationRows.length} reservations, ${reviewRows.length} reviews (${toISODate(startDate)} to ${toISODate(endDate)}).`
   );
 }
 

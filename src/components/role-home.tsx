@@ -1,4 +1,4 @@
-import { logout } from "@/app/actions/auth";
+import { AppSidebar } from "@/components/app-sidebar";
 
 const ROLE_TINT_CLASSES = {
   user: "bg-role-user-soft text-role-user",
@@ -20,30 +20,16 @@ export function RoleHome({
   note: string;
 }) {
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-bg px-6">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 flex flex-col gap-4">
-        <span
-          className={`self-start rounded-full px-3 py-1 text-xs font-medium ${ROLE_TINT_CLASSES[roleTint]}`}
-        >
-          {roleLabel}
-        </span>
-
-        <div>
+    <div className="flex h-dvh overflow-hidden bg-bg">
+      <AppSidebar role={roleTint} name={name} activePath={roleTint === "user" ? "/booking" : "/schedule"} />
+      <main className="mx-auto flex w-full max-w-3xl grow flex-col gap-4 overflow-y-auto px-5 py-8 sm:px-8">
+        <span className={`self-start rounded-full px-3 py-1 text-xs font-medium ${ROLE_TINT_CLASSES[roleTint]}`}>{roleLabel}</span>
+        <div className="rounded-2xl border border-border bg-surface p-6">
           <h1 className="text-xl">ようこそ、{name} さん</h1>
           <p className="mt-1 text-sm text-ink-faint mono">社員番号: {employeeId}</p>
+          <p className="mt-5 text-xs leading-relaxed text-ink-faint">{note}</p>
         </div>
-
-        <p className="text-xs text-ink-faint leading-relaxed">{note}</p>
-
-        <form action={logout}>
-          <button
-            type="submit"
-            className="h-11 w-full rounded-xl border border-destructive text-destructive text-sm font-medium bg-surface"
-          >
-            ログアウト
-          </button>
-        </form>
-      </div>
+      </main>
     </div>
   );
 }

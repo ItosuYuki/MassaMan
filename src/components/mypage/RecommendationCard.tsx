@@ -1,6 +1,6 @@
 import { formatTimeLabel, formatDateWithWeekday } from "@/lib/booking/schedule";
 import type { Greeting } from "@/lib/mypage/greeting";
-import type { OpenSlot } from "@/lib/booking/actions";
+import type { OpenSlot } from "@/lib/booking/data";
 
 export function RecommendationCard({ greeting, openSlots }: { greeting: Greeting; openSlots: OpenSlot[] }) {
   return (

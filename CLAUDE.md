@@ -95,8 +95,10 @@ matches reality before relying on it, since it will keep drifting as more featur
   `requireRole`, the Data Access Layer per Next.js's own auth guidance), `db.ts` (opens a
   `postgres.js` connection to the local Docker-run PostgreSQL, wrapped in Drizzle ORM —
   see `src/db/schema.ts` for the schema and `docker-compose.yml` for the local server),
-  `employees.ts` (`findEmployeeByCode`, queries that database — see below), `booking/repo.ts`
-  (the reservations/reviews data-access layer, same database).
+  `employees.ts` (`findEmployeeByCode`, queries that database — see below), `booking/data.ts`
+  (the reservation/review data-access + business logic for the user booking flow, same
+  database), `reservations.ts`/`shifts.ts`/`shift-slots.ts` (the therapist-facing schedule
+  screen's equivalent layer).
 - `src/proxy.ts` — Next.js 16 renamed `middleware.js` to `proxy.js`; does the optimistic
   (cookie-only) auth redirect. Per-route/Server Action checks still happen via `dal.ts` — Next's
   own docs are explicit that Proxy alone is not sufficient.
@@ -110,7 +112,9 @@ matches reality before relying on it, since it will keep drifting as more featur
   Drizzle ORM, `src/db/schema.ts`) — see `docs/database-auth-design.md` and its §5 for the
   8 test accounts / shared test password. Run `docker compose up -d` to start Postgres
   locally, then `pnpm db:generate && pnpm db:migrate && pnpm db:seed` to build the schema
-  and populate test data before running the app.
+  and populate test data before running the app (see
+  `docs/superpowers/specs/2026-09-10-postgres-migration-design.md` for the full migration
+  design).
 - **Session**: signed (HS256, `jose`), stored in an `httpOnly` cookie. Secret comes from
   `SESSION_SECRET` in `.env.local` (see `.env.example`; generate with `openssl rand -base64 32`).
 - Reservation creation (issue #6) is implemented and reads/writes the same PostgreSQL

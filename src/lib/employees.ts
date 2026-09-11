@@ -5,6 +5,7 @@ import { therapistProfiles, users } from "@/db/schema";
 import type { Role } from "@/lib/session";
 
 export type Employee = {
+  id: string;
   employeeId: string;
   name: string;
   role: Role;
@@ -14,6 +15,7 @@ export type Employee = {
 export async function findEmployeeByCode(employeeId: string): Promise<Employee | null> {
   const rows = await db
     .select({
+      id: users.id,
       employeeCode: users.employeeCode,
       name: users.name,
       role: users.role,
@@ -27,6 +29,7 @@ export async function findEmployeeByCode(employeeId: string): Promise<Employee |
   if (!row) return null;
 
   return {
+    id: row.id,
     employeeId: row.employeeCode,
     name: row.name,
     role: row.role,

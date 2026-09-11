@@ -6,6 +6,8 @@ import {
   CLOSING_TIME_MINUTES,
   getTimeSlots,
   formatTimeLabel,
+  formatDateWithWeekday,
+  formatDateWithYearAndWeekday,
   getWeekDates,
   formatIsoDate,
   isSlotInPast,
@@ -37,6 +39,14 @@ describe("schedule", () => {
     expect(formatTimeLabel(9 * 60 + 15)).toBe("9:15");
     expect(formatTimeLabel(9 * 60 + 45)).toBe("9:45");
     expect(formatTimeLabel(19 * 60)).toBe("19:00");
+  });
+
+  it("keeps the compact date label available for booking screens", () => {
+    expect(formatDateWithWeekday("2026-09-10")).toBe("09/10（木）");
+  });
+
+  it("includes the year in history date labels", () => {
+    expect(formatDateWithYearAndWeekday("2026-09-10")).toBe("2026/09/10（木）");
   });
 
   it("getWeekDates returns the Mon-Fri dates of the week containing a Wednesday anchor", () => {

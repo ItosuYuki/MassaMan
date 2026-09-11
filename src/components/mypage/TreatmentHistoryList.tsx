@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { formatDateWithWeekday, formatTimeLabel } from "@/lib/booking/schedule";
-import { submitReview, type HistoryEntry } from "@/lib/booking/actions";
+import { formatDateWithYearAndWeekday, formatTimeLabel } from "@/lib/booking/schedule";
+import { submitReview, type HistoryEntry } from "@/lib/booking/data";
 import { ReviewDialog } from "./ReviewDialog";
 
 export function TreatmentHistoryList({ history }: { history: HistoryEntry[] }) {
@@ -42,7 +42,7 @@ export function TreatmentHistoryList({ history }: { history: HistoryEntry[] }) {
           const detail = (
             <>
               <p className="mono text-sm font-medium text-ink">
-                {formatDateWithWeekday(r.date)} {formatTimeLabel(r.startMinutes)}〜
+                {formatDateWithYearAndWeekday(r.date)} {formatTimeLabel(r.startMinutes)}〜
               </p>
               <p className="text-[11px] text-ink-faint">
                 施術時間 {r.durationMinutes}分・担当 {r.therapistName}（{r.therapistSpecialty}）
