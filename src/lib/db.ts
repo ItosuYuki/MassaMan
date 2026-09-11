@@ -17,6 +17,12 @@ const pgClient =
   globalForDb.pgClient ??
   postgres(process.env.DATABASE_URL!, {
     ssl: process.env.NODE_ENV === "production" ? "require" : undefined,
+    // Supabase's production DATABASE_URL points at the transaction-mode
+    // PgBouncer pooler, which can hand consecutive queries to different
+    // backend connections — prepared statements from postgres.js's default
+    // "extended query" mode don't survive that, causing "prepared statement
+    // ... does not exist".
+    prepare: process.env.NODE_ENV !== "production",
     types: {
       date: { to: 1082, from: [1082], serialize: (x: string) => x, parse: (x: string) => x },
       time: { to: 1083, from: [1083], serialize: (x: string) => x, parse: (x: string) => x },
