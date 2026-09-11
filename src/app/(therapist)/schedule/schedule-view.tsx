@@ -1,29 +1,14 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { logout } from "@/app/actions/auth";
 import { saveWeekAvailability, copyWeekAvailability } from "@/app/actions/shifts";
-import {
-  cancelReservation,
-  rescheduleReservation,
-  setBookingNotificationEnabled,
-  setBookingNotificationMinutes,
-} from "@/app/actions/bookings";
+import { cancelReservation, rescheduleReservation } from "@/app/actions/bookings";
+import { NotificationSettingsCard } from "@/components/notification-settings-card";
 import { SLOT_COUNT, SLOTS_PER_HOUR, slotStartTime, type SlotState } from "@/lib/shift-slots";
 import type { TherapistReservation } from "@/lib/reservations";
 import type { NotificationCardSettings } from "@/lib/notification-settings";
-
-const NOTIFICATION_MINUTES_OPTIONS = [15, 30, 60, 120] as const;
-
-const NOTIFICATION_TIMING_LABELS: Record<(typeof NOTIFICATION_MINUTES_OPTIONS)[number], string> = {
-  15: "15分前",
-  30: "30分前",
-  60: "1時間前",
-  120: "2時間前",
-};
 import { localDateIso } from "@/lib/local-date";
 
 type DayData = {
@@ -178,15 +163,6 @@ function toShortTime(value: string) {
   return minute === 0 ? `${Number(hourStr)}:00` : `${Number(hourStr)}:${minuteStr}`;
 }
 
-function ScheduleIcon() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 3" />
-    </svg>
-  );
-}
-
 // A reservation that's already started (or is on a past day) can't be
 // cancelled or rescheduled — "undoing" a session that already happened (or is
 // happening right now) doesn't mean anything. Mirrors the availability grid's
@@ -196,7 +172,6 @@ function isEventLocked(event: TherapistReservation, day: DayData, nowTime: strin
 }
 
 export function ScheduleView({
-  name,
   days: initialDays,
   weekLabel,
   prevWeekIso,
@@ -205,7 +180,6 @@ export function ScheduleView({
   notification,
   nowTime,
 }: {
-  name: string;
   days: DayData[];
   weekLabel: string;
   prevWeekIso: string;
@@ -521,20 +495,6 @@ export function ScheduleView({
     });
   }
 
-  function handleToggleNotification() {
-    if (!notification) return;
-    startTransition(() => {
-      setBookingNotificationEnabled(!notification.enabled);
-    });
-  }
-
-  function handleSetNotificationMinutes(minutes: (typeof NOTIFICATION_MINUTES_OPTIONS)[number]) {
-    if (!notification || minutes === notification.minutesBefore) return;
-    startTransition(() => {
-      setBookingNotificationMinutes(minutes);
-    });
-  }
-
   function handleCloseHelp() {
     setShowHelp(false);
     window.localStorage.setItem(HELP_DISMISSED_KEY, "1");
@@ -548,52 +508,8 @@ export function ScheduleView({
   const openEventLocked = openEvent !== null && openEventDay !== null && isEventLocked(openEvent, openEventDay, nowTime);
 
   return (
-    <div className="min-h-dvh flex bg-bg">
-      {/* Sidebar */}
-      <div className="w-[220px] shrink-0 bg-surface border-r border-border flex flex-col py-6">
-        <div className="flex items-center gap-2.5 px-5 pb-5 border-b border-border mb-4">
-          <div className="w-[30px] h-[30px] rounded-[9px] overflow-hidden shrink-0">
-            <Image src="/icon.png" alt="マッサマン" width={30} height={30} className="w-full h-full object-cover" />
-          </div>
-          <span className="flex flex-col leading-tight">
-            <span className="font-sans font-black text-sm tracking-[-0.02em]">マッサマン</span>
-            <span className="font-heading text-[8px] tracking-wide text-ink-faint">
-              <b>Massa</b>ge <b>Man</b>ager
-            </span>
-          </span>
-        </div>
-
-        <nav className="flex flex-col gap-0.5 px-3">
-          <Link
-            href="/schedule"
-            className="flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] text-[13px] font-medium bg-role-therapist-soft text-role-therapist"
-          >
-            <ScheduleIcon />
-            マイスケジュール
-          </Link>
-        </nav>
-
-        <div className="grow" />
-
-        <div className="px-5 pt-4 border-t border-border flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-full bg-role-therapist-soft flex items-center justify-center text-xs text-role-therapist font-medium shrink-0">
-            {name.slice(0, 1)}
-          </div>
-          <div className="min-w-0">
-            <div className="text-xs truncate">{name}</div>
-            <div className="text-[10px] text-ink-faint">マッサージ師</div>
-          </div>
-        </div>
-
-        <form action={logout} className="px-5 pt-3">
-          <button type="submit" className="w-full h-9 rounded-lg border border-destructive text-destructive text-xs font-medium bg-surface">
-            ログアウト
-          </button>
-        </form>
-      </div>
-
-      {/* Main */}
-      <div className="grow p-8 flex flex-col gap-4 overflow-y-auto">
+    <>
+      <main className="grow p-8 flex flex-col gap-4 overflow-y-auto">
         <h1 className="text-lg">マイスケジュール</h1>
 
         <div className="rounded-2xl border border-border bg-surface p-4 flex items-center gap-3 flex-wrap">
@@ -974,59 +890,7 @@ export function ScheduleView({
               体調不良などやむを得ない場合は、予約マスをクリックして「キャンセル」できます。利用者には自動で通知されます。
             </p>
 
-            {notification && (
-              <div className="rounded-2xl border border-border bg-surface p-4">
-                <h3 className="text-sm mb-0.5">予約 / キャンセル通知（施術者向け）</h3>
-
-                <div className="flex items-center justify-between gap-2 py-2.5">
-                  <div>
-                    <div className="text-[13px]">通知</div>
-                    <div className="text-[11px] text-ink-faint mt-0.5">Slackに通知（#massage-room）</div>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    onClick={handleToggleNotification}
-                    aria-pressed={notification.enabled}
-                    className={`w-[38px] h-[22px] rounded-full relative shrink-0 disabled:opacity-50 ${
-                      notification.enabled ? "bg-accent" : "bg-surface-2 border border-border"
-                    }`}
-                  >
-                    <span
-                      className="absolute top-0.5 w-[18px] h-[18px] rounded-full bg-white shadow transition-[left]"
-                      style={{ left: notification.enabled ? 18 : 2 }}
-                    />
-                  </button>
-                </div>
-
-                <div className="py-2.5 border-t border-border">
-                  <div className="text-[13px]">通知タイミング</div>
-                  <div className="text-[11px] text-ink-faint mt-0.5 mb-2">予約時刻の何分前に届けるか</div>
-                  <div role="radiogroup" aria-label="通知タイミング" className="grid grid-cols-2 gap-1.5">
-                    {NOTIFICATION_MINUTES_OPTIONS.map((minutes) => {
-                      const selected = notification.minutesBefore === minutes;
-                      return (
-                        <button
-                          key={minutes}
-                          type="button"
-                          role="radio"
-                          aria-checked={selected}
-                          disabled={isPending}
-                          onClick={() => handleSetNotificationMinutes(minutes)}
-                          className={`text-xs rounded-lg py-1.5 border disabled:opacity-50 ${
-                            selected
-                              ? "bg-accent text-white border-accent"
-                              : "bg-surface-2 border-border text-ink-soft"
-                          }`}
-                        >
-                          {NOTIFICATION_TIMING_LABELS[minutes]}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
+            <NotificationSettingsCard role="therapist" settings={notification} />
           </div>
         </div>
 
@@ -1041,7 +905,7 @@ export function ScheduleView({
             {isPending ? "保存中…" : "この内容で保存する"}
           </button>
         </div>
-      </div>
+    </main>
 
       {openEvent && (
         <div
@@ -1169,6 +1033,6 @@ export function ScheduleView({
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

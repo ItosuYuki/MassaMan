@@ -393,12 +393,17 @@ export async function getOwnReservationAt(
   return match ? { id: match.id } : null;
 }
 
-export type MyReservation = {
+type ReservationSummary = {
   id: string;
   date: string;
   startMinutes: number;
   durationMinutes: number;
   note: string;
+};
+
+export type MyReservation = ReservationSummary & {
+  therapistName: string;
+  roomName: string;
 };
 
 /**
@@ -418,8 +423,13 @@ export async function getMyReservations(limit = 5): Promise<MyReservation[]> {
       startTime: reservations.startTime,
       endTime: reservations.endTime,
       requestedNote: reservations.requestedNote,
+      therapistName: users.name,
+      roomName: rooms.name,
     })
     .from(reservations)
+    .innerJoin(therapistProfiles, eq(therapistProfiles.id, reservations.therapistId))
+    .innerJoin(users, eq(users.id, therapistProfiles.userId))
+    .innerJoin(rooms, eq(rooms.id, reservations.roomId))
     .where(and(eq(reservations.userId, userId), eq(reservations.status, "confirmed")));
 
   return rows
@@ -429,6 +439,8 @@ export async function getMyReservations(limit = 5): Promise<MyReservation[]> {
       startMinutes: timeToMinutes(r.startTime),
       durationMinutes: timeToMinutes(r.endTime) - timeToMinutes(r.startTime),
       note: r.requestedNote ?? "",
+      therapistName: r.therapistName,
+      roomName: r.roomName,
     }))
     .filter((r) => !isSlotInPast(r.date, r.startMinutes, now))
     .sort((a, b) => (a.date === b.date ? a.startMinutes - b.startMinutes : a.date < b.date ? -1 : 1))
@@ -437,7 +449,7 @@ export async function getMyReservations(limit = 5): Promise<MyReservation[]> {
 
 export type MyReview = { rating: number; comment: string };
 
-export type HistoryEntry = MyReservation & {
+export type HistoryEntry = ReservationSummary & {
   therapistName: string;
   therapistSpecialty: string;
   review: MyReview | null;

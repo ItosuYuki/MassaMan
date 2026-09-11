@@ -30,7 +30,20 @@ export function CurrentReservationCard({
               <p className="mono text-xl font-bold text-accent-strong">
                 {formatDateWithWeekday(r.date)} {formatTimeLabel(r.startMinutes)}〜
               </p>
-              <p className="text-xs text-ink-faint">施術時間 {r.durationMinutes}分</p>
+              <div className="mt-2 grid gap-1 text-xs">
+                <p className="flex items-center justify-between gap-3">
+                  <span className="text-ink-faint">施術者</span>
+                  <span className="text-ink-soft">{r.therapistName}</span>
+                </p>
+                <p className="flex items-center justify-between gap-3">
+                  <span className="text-ink-faint">マッサージ室</span>
+                  <span className="text-ink-soft">{r.roomName}</span>
+                </p>
+                <p className="flex items-center justify-between gap-3">
+                  <span className="text-ink-faint">施術時間</span>
+                  <span className="text-ink-soft">{r.durationMinutes}分</span>
+                </p>
+              </div>
             </button>
           ))}
         </div>

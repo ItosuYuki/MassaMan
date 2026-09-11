@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, and } from "drizzle-orm";
 import { requireRole } from "@/lib/dal";
 import { findTherapistProfileIdByEmployeeCode } from "@/lib/employees";
 import {
@@ -11,11 +10,6 @@ import {
   type RescheduleResult,
 } from "@/lib/reservations";
 import { markRangeUnavailable } from "@/lib/shifts";
-import { db } from "@/lib/db";
-import { notificationSettings } from "@/db/schema";
-import { getNotificationUserId } from "@/lib/notification-settings";
-
-const NOTIFICATION_MINUTES_OPTIONS = [5, 10, 15, 30, 60, 120] as const;
 
 /**
  * Cancelling from this (therapist-facing) screen means the therapist can't do
@@ -53,26 +47,4 @@ export async function rescheduleReservation(
     revalidatePath("/schedule");
   }
   return result;
-}
-
-export async function setBookingNotificationEnabled(enabled: boolean) {
-  const session = await requireRole("therapist");
-  const userId = await getNotificationUserId(session.employeeId);
-  await db
-    .update(notificationSettings)
-    .set({ enabled })
-    .where(and(eq(notificationSettings.userId, userId), eq(notificationSettings.channel, "slack")));
-  revalidatePath("/schedule");
-}
-
-export async function setBookingNotificationMinutes(minutes: number) {
-  if (!NOTIFICATION_MINUTES_OPTIONS.includes(minutes as (typeof NOTIFICATION_MINUTES_OPTIONS)[number])) return;
-
-  const session = await requireRole("therapist");
-  const userId = await getNotificationUserId(session.employeeId);
-  await db
-    .update(notificationSettings)
-    .set({ minutesBefore: minutes })
-    .where(and(eq(notificationSettings.userId, userId), eq(notificationSettings.channel, "slack")));
-  revalidatePath("/schedule");
 }

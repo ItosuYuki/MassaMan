@@ -18,14 +18,27 @@ export function ReservationDetailDialog({
       <p className="mono mb-1 text-lg font-bold text-accent-strong">
         {formatDateWithWeekday(reservation.date)} {formatTimeLabel(reservation.startMinutes)}〜
       </p>
-      <p className="mb-1 text-xs text-ink-faint">施術時間 {reservation.durationMinutes}分</p>
+      <dl className="mb-5 mt-3 grid gap-2 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <dt className="text-ink-faint">施術者</dt>
+          <dd className="text-ink-soft">{reservation.therapistName}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <dt className="text-ink-faint">マッサージ室</dt>
+          <dd className="text-ink-soft">{reservation.roomName}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <dt className="text-ink-faint">施術時間</dt>
+          <dd className="text-ink-soft">{reservation.durationMinutes}分</dd>
+        </div>
+      </dl>
       {reservation.note && (
-        <div className="mb-5">
+        <div className="mb-5 border-t border-border pt-4">
           <p className="mb-1 text-xs text-ink-faint">施術してほしい部位・伝えたいこと（任意）</p>
           <p className="whitespace-pre-wrap text-sm text-ink-soft">{reservation.note}</p>
         </div>
       )}
-      <div className={`flex flex-col gap-2.5 ${reservation.note ? "" : "mt-5"}`}>
+      <div className="flex flex-col gap-2.5">
         {/* Lands on the booking page's own slot and opens its cancel-confirmation dialog directly. */}
         <Link
           href={`/booking?date=${reservation.date}&startMinutes=${reservation.startMinutes}`}

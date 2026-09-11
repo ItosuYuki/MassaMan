@@ -5,6 +5,7 @@ import { currentSlotIndex } from "@/lib/shift-slots";
 import { getReservationsForTherapist } from "@/lib/reservations";
 import { getNotificationCardSettings } from "@/lib/notification-settings";
 import { localDateIso, localTimeHHMM, parseIsoDateLocal, addLocalDays, isValidDateIso, localWeekday } from "@/lib/local-date";
+import { AppSidebar } from "@/components/app-sidebar";
 import { ScheduleView } from "./schedule-view";
 
 const WEEKDAY_LABELS = ["月", "火", "水", "木", "金"];
@@ -61,16 +62,18 @@ export default async function SchedulePage({
   const notification = await getNotificationCardSettings(session.employeeId, "therapist");
 
   return (
-    <ScheduleView
-      key={days[0].dateIso}
-      name={session.name}
-      days={days}
-      weekLabel={weekLabel}
-      prevWeekIso={prevWeekIso}
-      nextWeekIso={nextWeekIso}
-      currentWeekMondayIso={currentWeekMondayIso}
-      notification={notification}
-      nowTime={nowTime}
-    />
+    <div className="flex h-dvh overflow-hidden bg-bg">
+      <AppSidebar role="therapist" name={session.name} activePath="/schedule" />
+      <ScheduleView
+        key={days[0].dateIso}
+        days={days}
+        weekLabel={weekLabel}
+        prevWeekIso={prevWeekIso}
+        nextWeekIso={nextWeekIso}
+        currentWeekMondayIso={currentWeekMondayIso}
+        notification={notification}
+        nowTime={nowTime}
+      />
+    </div>
   );
 }
