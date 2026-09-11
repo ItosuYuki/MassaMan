@@ -22,7 +22,7 @@ export function RoleHome({
   return (
     <div className="flex h-dvh overflow-hidden bg-bg">
       <AppSidebar role={roleTint} name={name} activePath={roleTint === "user" ? "/booking" : "/schedule"} />
-      <main className="mx-auto flex w-full max-w-3xl grow flex-col gap-4 overflow-y-auto px-5 py-8 sm:px-8">
+      <main className={`mx-auto flex w-full max-w-3xl grow flex-col gap-4 overflow-y-auto px-5 py-8 sm:px-8 ${roleTint === "user" ? "pb-24 sm:pb-8" : ""}`}>
         <span className={`self-start rounded-full px-3 py-1 text-xs font-medium ${ROLE_TINT_CLASSES[roleTint]}`}>{roleLabel}</span>
         <div className="rounded-2xl border border-border bg-surface p-6">
           <h1 className="text-xl">ようこそ、{name} さん</h1>

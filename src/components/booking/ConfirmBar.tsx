@@ -2,7 +2,7 @@
 
 export function ConfirmBar(props: { disabled: boolean; onOpen: () => void }) {
   return (
-    <div className="sticky bottom-0 bg-gradient-to-t from-bg via-bg to-transparent px-5 pb-6 pt-4 sm:static sm:bg-none sm:p-0">
+    <div className="sticky bottom-16 bg-gradient-to-t from-bg via-bg to-transparent px-5 pb-6 pt-4 sm:static sm:bg-none sm:p-0">
       <button
         onClick={props.onOpen}
         disabled={props.disabled}

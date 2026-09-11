@@ -10,7 +10,7 @@ export default async function HistoryPage() {
   return (
     <div className="flex h-dvh overflow-hidden bg-bg">
       <AppSidebar role="user" name={session.name} activePath="/history" />
-      <main className="grow overflow-y-auto">
+      <main className="grow overflow-y-auto pb-20 sm:pb-0">
         <div className="mx-auto max-w-md p-5 sm:max-w-2xl sm:p-8">
           <p className="mb-3 text-xs text-ink-faint">施術履歴</p>
           <div className="rounded-2xl border border-border bg-surface p-5">
