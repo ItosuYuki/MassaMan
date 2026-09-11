@@ -7,7 +7,7 @@ export default async function BookingPage() {
   const session = await requireRole("user");
 
   return (
-    <div className="flex min-h-dvh bg-bg">
+    <div className="flex h-dvh overflow-hidden bg-bg">
       <AppSidebar role="user" name={session.name} activePath="/booking" />
       <main className="grow overflow-y-auto">
         <Suspense>

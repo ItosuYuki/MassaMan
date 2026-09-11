@@ -23,7 +23,7 @@ export default async function MyPage() {
   const hasReservation = reservations.length > 0;
 
   return (
-    <div className="flex min-h-dvh bg-bg">
+    <div className="flex h-dvh overflow-hidden bg-bg">
       <AppSidebar role="user" name={session.name} activePath="/mypage" />
       <main className="grow overflow-y-auto">
         <FirstTimeGuide />

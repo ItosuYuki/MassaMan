@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { disconnectSlackAction } from "@/app/actions/slack";
 import { saveNotificationSettings, type NotificationSettingsActionState } from "@/app/actions/notifications";
 import type { NotificationCardSettings } from "@/lib/notification-settings";
@@ -14,8 +14,32 @@ export function NotificationSettingsCard({ role, settings }: { role: "user" | "t
   );
   const isUser = role === "user";
 
+  // Toast for the save confirmation, instead of mutating the button's own label — a transient
+  // status message reads more clearly than a button that briefly claims to be "already saved".
+  // Showing it is derived during render (from the new action result), not set from inside an
+  // effect; the effect only owns the async auto-hide timer.
+  const [toastVisible, setToastVisible] = useState(false);
+  const [seenState, setSeenState] = useState(state);
+  if (state !== seenState) {
+    setSeenState(state);
+    if (state.saved) setToastVisible(true);
+  }
+  useEffect(() => {
+    if (!toastVisible) return;
+    const timer = setTimeout(() => setToastVisible(false), 3000);
+    return () => clearTimeout(timer);
+  }, [toastVisible]);
+
   return (
-    <form action={formAction} className="w-full rounded-[14px] border border-border bg-surface px-[18px] py-4">
+    <form
+      // Remounting on settings change resets the <select>/<input>'s defaultValue/defaultChecked
+      // to the freshly-saved values — otherwise, since they're uncontrolled, the DOM keeps
+      // showing whatever was there at first mount even after a successful save re-fetches
+      // `settings` from the server.
+      key={JSON.stringify(settings)}
+      action={formAction}
+      className="w-full rounded-[14px] border border-border bg-surface px-[18px] py-4"
+    >
       <h3 className="mb-0.5 text-sm">{isUser ? "予約リマインド通知" : "予約・キャンセル通知"}</h3>
 
       <div className="mb-2 rounded-lg bg-accent-soft px-3 py-2.5">
@@ -82,9 +106,22 @@ export function NotificationSettingsCard({ role, settings }: { role: "user" | "t
       </div>
 
       <button type="submit" disabled={pending} className="mt-1 h-9 w-full rounded-lg bg-accent text-xs font-medium text-white transition hover:bg-accent-strong disabled:cursor-wait disabled:opacity-60">
-        {pending ? "保存中…" : state.saved ? "保存しました" : "設定を保存"}
+        {pending ? "保存中…" : "設定を保存"}
       </button>
       {state.error && <p role="alert" className="mt-2 text-xs text-destructive">{state.error}</p>}
+
+      {toastVisible && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-accent-soft px-3 py-2 text-xs text-accent-strong"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="shrink-0">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+          通知設定を保存しました
+        </div>
+      )}
     </form>
   );
 }

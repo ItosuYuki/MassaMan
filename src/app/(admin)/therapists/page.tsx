@@ -37,7 +37,7 @@ export default async function TherapistManagementPage({
   const reviews = selected ? await listTherapistReviews(selected.therapistId) : [];
 
   return (
-    <div className="flex min-h-dvh bg-bg">
+    <div className="flex h-dvh overflow-hidden bg-bg">
       <AppSidebar role="admin" name={session.name} activePath="/therapists" />
 
       <div className="flex grow flex-col overflow-hidden">

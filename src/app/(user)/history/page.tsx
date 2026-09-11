@@ -8,7 +8,7 @@ export default async function HistoryPage() {
   const history = await getMyReservationHistory(100);
 
   return (
-    <div className="flex min-h-dvh bg-bg">
+    <div className="flex h-dvh overflow-hidden bg-bg">
       <AppSidebar role="user" name={session.name} activePath="/history" />
       <main className="grow overflow-y-auto">
         <div className="mx-auto max-w-md p-5 sm:max-w-2xl sm:p-8">

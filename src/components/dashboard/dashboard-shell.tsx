@@ -49,7 +49,7 @@ export function DashboardShell({
   const hrefFor = (changes: Record<string, string>) => withParams(basePath, params, changes);
 
   return (
-    <div className="min-h-dvh flex bg-bg">
+    <div className="h-dvh overflow-hidden flex bg-bg">
       <AppSidebar role="admin" name={adminName} activePath={basePath} />
 
       {/* Main column */}
