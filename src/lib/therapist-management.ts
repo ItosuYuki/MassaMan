@@ -38,6 +38,9 @@ function initialFor(name: string): string {
  */
 export async function listTherapistManagementItems(): Promise<TherapistManagementItem[]> {
   const rows = await sql<TherapistManagementRow[]>`
+    WITH current_jst AS (
+      SELECT CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Tokyo' AS now
+    )
     SELECT
       tp.id AS therapist_id,
       u.name,
@@ -47,14 +50,14 @@ export async function listTherapistManagementItems(): Promise<TherapistManagemen
             SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (LEAST(r.end_time, TIME '20:00') - r.start_time)) / 60.0 + 15), 0)
             FROM reservations r
             WHERE r.therapist_id = tp.id
-              AND r.reservation_date BETWEEN CURRENT_DATE - INTERVAL '30 days' AND CURRENT_DATE
+              AND r.reservation_date BETWEEN current_jst.now::date - 29 AND current_jst.now::date
               AND r.status IN ('confirmed', 'completed')
               AND r.start_time < TIME '20:00'
           ) / NULLIF((
             SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (LEAST(ts.end_time, TIME '20:00') - ts.start_time)) / 60.0), 0)
             FROM therapist_shifts ts
             WHERE ts.therapist_id = tp.id
-              AND ts.work_date BETWEEN CURRENT_DATE - INTERVAL '30 days' AND CURRENT_DATE
+              AND ts.work_date BETWEEN current_jst.now::date - 29 AND current_jst.now::date
               AND ts.start_time < TIME '20:00'
           ), 0)
         ),
@@ -74,17 +77,18 @@ export async function listTherapistManagementItems(): Promise<TherapistManagemen
       ) AS review_count,
       CASE
         WHEN today_shift.start_time IS NULL THEN '休み'
-        WHEN CURRENT_TIME < today_shift.start_time THEN '勤務予定'
-        WHEN CURRENT_TIME < today_shift.end_time THEN '勤務中'
+        WHEN current_jst.now::time < today_shift.start_time THEN '勤務予定'
+        WHEN current_jst.now::time < today_shift.end_time THEN '勤務中'
         ELSE '勤務終了'
       END AS work_status
     FROM therapist_profiles tp
+    CROSS JOIN current_jst
     JOIN users u ON u.id = tp.user_id
     LEFT JOIN LATERAL (
       SELECT ts.start_time, ts.end_time
       FROM therapist_shifts ts
       WHERE ts.therapist_id = tp.id
-        AND ts.work_date = CURRENT_DATE
+        AND ts.work_date = current_jst.now::date
       LIMIT 1
     ) today_shift ON true
     WHERE tp.is_active = true
@@ -122,14 +126,4 @@ export async function listTherapistReviews(therapistId: string): Promise<Therapi
     WHERE r.therapist_id = ${therapistId}
     ORDER BY rv.created_at DESC
   `;
-}
-
-export type TherapistRegistrationOptions = {
-  rooms: { id: string; name: string }[];
-};
-
-export async function getTherapistRegistrationOptions(): Promise<TherapistRegistrationOptions> {
-  const rooms = await sql<{ id: string; name: string }[]>`SELECT id, name FROM rooms ORDER BY name`;
-
-  return { rooms };
 }

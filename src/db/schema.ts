@@ -125,7 +125,7 @@ export const therapistBreaks = pgTable(
 
 export const rooms = pgTable("rooms", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(), // 第1マッサージ室／第2マッサージ室
+  name: text("name").notNull(), // 本社ビル4F マッサージルーム
 });
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/dal";
-import { AdminSidebar } from "@/components/dashboard/dashboard-shell";
+import { AdminPageShell } from "@/components/admin/admin-page-shell";
+import { firstSearchParam, type SearchParamValue } from "@/lib/dashboard-params";
 import { listTherapistManagementItems, listTherapistReviews } from "@/lib/therapist-management";
 
 function RatingStars({ rating, size = "normal" }: { rating: number | null; size?: "normal" | "small" }) {
@@ -22,33 +23,23 @@ function statusClass(status: string): string {
 export default async function TherapistManagementPage({
   searchParams,
 }: {
-  searchParams: Promise<{ therapist?: string }>;
+  searchParams: Promise<{ therapist?: SearchParamValue }>;
 }) {
   const session = await requireRole("admin");
   const therapists = await listTherapistManagementItems();
-  const requestedId = (await searchParams).therapist;
+  const requestedId = firstSearchParam((await searchParams).therapist);
   const selected = therapists.find((therapist) => therapist.therapistId === requestedId) ?? therapists[0];
   const reviews = selected ? await listTherapistReviews(selected.therapistId) : [];
 
   return (
-    <div className="min-h-dvh flex bg-bg">
-      <AdminSidebar adminName={session.name} active="therapists" />
-
-      <main className="grow min-w-0 overflow-y-auto px-8 py-7">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-xl">マッサージ師管理</h1>
-              <span className="rounded-full bg-role-admin-soft px-2.5 py-1 text-[11px] font-medium text-role-admin">管理者専用</span>
-            </div>
-            <p className="mt-1 text-xs text-ink-faint">在籍{therapists.length}名 / 稼働状況・満足度・口コミをまとめて確認できます</p>
-          </div>
-          <Link href="/therapists/new" className="shrink-0 rounded-[10px] bg-role-admin px-4 py-2.5 text-xs font-medium text-white">
-            + 新しいマッサージ師を登録
-          </Link>
-        </div>
-
-        <section className="mt-4 overflow-x-auto rounded-2xl border border-border bg-surface px-5 py-4">
+    <AdminPageShell
+      adminName={session.name}
+      active="therapists"
+      title="マッサージ師管理"
+      subtitle={`在籍${therapists.length}名 / 稼働状況・満足度・口コミをまとめて確認できます`}
+      contentClassName="flex flex-col gap-4"
+    >
+      <section className="overflow-x-auto rounded-2xl border border-border bg-surface px-5 py-4">
           <div className="min-w-[920px]">
             <div className="grid grid-cols-[1.6fr_1.4fr_1fr_.9fr_.9fr_.9fr] items-center gap-2.5 px-1 pb-2.5">
               <span className="text-[11px] text-ink-faint">氏名</span>
@@ -100,10 +91,10 @@ export default async function TherapistManagementPage({
               })
             )}
           </div>
-        </section>
+      </section>
 
-        {selected && (
-          <section className="mt-4 rounded-2xl border border-border bg-surface px-5 py-5">
+      {selected && (
+        <section className="rounded-2xl border border-border bg-surface px-5 py-5">
             <div className="flex items-baseline justify-between gap-4">
               <h2 className="text-sm">{selected.name} さんへの口コミ（{selected.reviewCount}件）</h2>
               <span className="text-[11px] text-ink-faint">投稿者は所属部署のみ表示（匿名性を保持）</span>
@@ -124,9 +115,8 @@ export default async function TherapistManagementPage({
                 ))}
               </div>
             )}
-          </section>
-        )}
-      </main>
-    </div>
+        </section>
+      )}
+    </AdminPageShell>
   );
 }
