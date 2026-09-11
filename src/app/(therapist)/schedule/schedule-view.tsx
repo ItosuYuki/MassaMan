@@ -660,7 +660,11 @@ export function ScheduleView({
                 <div className="grow">
                   <div className="text-[13px] font-bold">はじめての方へ — 使い方は3ステップです</div>
                   <div className="flex flex-wrap gap-4.5 mt-2">
-                    {["上のボタンで状態を選ぶ", "マスをクリック／ドラッグで反映", "「この内容で保存する」を押す"].map((step, i) => (
+                    {[
+                      "下の「施術可能／その他／休憩」から状態を選ぶ",
+                      "選んだ状態で、カレンダーのマスをクリックまたはドラッグする",
+                      "右下の「この内容で保存する」を押して確定する",
+                    ].map((step, i) => (
                       <div key={step} className="flex items-center gap-1.5 text-xs text-role-therapist">
                         <span className="w-[18px] h-[18px] rounded-full bg-surface border-[1.5px] border-role-therapist flex items-center justify-center text-[10px] font-bold shrink-0">
                           {i + 1}
