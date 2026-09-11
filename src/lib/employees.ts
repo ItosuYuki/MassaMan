@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { users } from "@/db/schema";
+import { therapistProfiles, users } from "@/db/schema";
 import type { Role } from "@/lib/session";
 
 export type Employee = {
@@ -34,14 +34,13 @@ export async function findEmployeeByCode(employeeId: string): Promise<Employee |
   };
 }
 
-const FIND_THERAPIST_PROFILE_ID_BY_CODE = db.prepare(`
-  SELECT tp.id
-  FROM therapist_profiles tp
-  JOIN users u ON u.id = tp.user_id
-  WHERE u.employee_code = ?
-`);
+export async function findTherapistProfileIdByEmployeeCode(employeeId: string): Promise<string | null> {
+  const rows = await db
+    .select({ id: therapistProfiles.id })
+    .from(therapistProfiles)
+    .innerJoin(users, eq(users.id, therapistProfiles.userId))
+    .where(eq(users.employeeCode, employeeId))
+    .limit(1);
 
-export function findTherapistProfileIdByEmployeeCode(employeeId: string): string | null {
-  const row = FIND_THERAPIST_PROFILE_ID_BY_CODE.get(employeeId) as { id: string } | undefined;
-  return row?.id ?? null;
+  return rows[0]?.id ?? null;
 }

@@ -7,7 +7,7 @@ import { getDaySchedule, saveDayAvailability, type SlotState } from "@/lib/shift
 import { currentSlotIndex, SLOT_COUNT, slotStartTime } from "@/lib/shift-slots";
 import { getReservationsForTherapist } from "@/lib/reservations";
 import { localDateIso, parseIsoDateLocal, addLocalDays, isValidDateIso, localWeekday } from "@/lib/local-date";
-import { runInTransaction } from "@/lib/db";
+import { db, type DbClient } from "@/lib/db";
 
 export type WeekAvailabilityInput = { dateIso: string; slots: SlotState[]; labels: (string | null)[] }[];
 
@@ -47,8 +47,8 @@ function isValidWeekInput(days: WeekAvailabilityInput): boolean {
  * stale client, a direct Action call, or the old (pre-block) UI could
  * otherwise save a day where "その他"/"休憩" and a confirmed booking overlap.
  */
-function conflictsWithReservations(therapistProfileId: string, dateIso: string, slots: SlotState[]): boolean {
-  const events = getReservationsForTherapist(therapistProfileId, dateIso);
+async function conflictsWithReservations(therapistProfileId: string, dateIso: string, slots: SlotState[]): Promise<boolean> {
+  const events = await getReservationsForTherapist(therapistProfileId, dateIso);
   if (events.length === 0) return false;
   for (let i = 0; i < SLOT_COUNT; i++) {
     const slotStart = slotStartTime(i);
@@ -75,20 +75,21 @@ function todayIso(): string {
  * client shouldn't be able to rewrite the past by sending its own copy of
  * them anyway.
  */
-function applyDayAvailability(
+async function applyDayAvailability(
   therapistProfileId: string,
   dateIso: string,
   slots: SlotState[],
   labels: (string | null)[],
-  today: string
+  today: string,
+  dbClient: DbClient
 ) {
   if (dateIso === today) {
-    const current = getDaySchedule(therapistProfileId, dateIso);
+    const current = await getDaySchedule(therapistProfileId, dateIso, dbClient);
     const cutoff = currentSlotIndex();
     slots = slots.map((s, i) => (i < cutoff ? current.slots[i] : s));
     labels = labels.map((l, i) => (i < cutoff ? current.labels[i] : l));
   }
-  saveDayAvailability(therapistProfileId, dateIso, slots, labels);
+  await saveDayAvailability(therapistProfileId, dateIso, slots, labels, dbClient);
 }
 
 export type SaveWeekResult =
@@ -98,7 +99,7 @@ export type SaveWeekResult =
 
 export async function saveWeekAvailability(days: WeekAvailabilityInput): Promise<SaveWeekResult> {
   const session = await requireRole("therapist");
-  const therapistProfileId = findTherapistProfileIdByEmployeeCode(session.employeeId);
+  const therapistProfileId = await findTherapistProfileIdByEmployeeCode(session.employeeId);
   if (!therapistProfileId) return { status: "invalid_input" };
 
   if (!isValidWeekInput(days)) return { status: "invalid_input" };
@@ -109,14 +110,14 @@ export async function saveWeekAvailability(days: WeekAvailabilityInput): Promise
   // Validate every day up front — reject the whole save rather than silently
   // applying only the days before the conflicting one.
   for (const day of editableDays) {
-    if (conflictsWithReservations(therapistProfileId, day.dateIso, day.slots)) {
+    if (await conflictsWithReservations(therapistProfileId, day.dateIso, day.slots)) {
       return { status: "conflict", dateIso: day.dateIso };
     }
   }
 
-  runInTransaction(() => {
+  await db.transaction(async (tx) => {
     for (const day of editableDays) {
-      applyDayAvailability(therapistProfileId, day.dateIso, day.slots, day.labels, today);
+      await applyDayAvailability(therapistProfileId, day.dateIso, day.slots, day.labels, today, tx);
     }
   });
 
@@ -157,7 +158,7 @@ export async function copyWeekAvailability(
   weekCount: number = 1
 ): Promise<CopyWeekResult> {
   const session = await requireRole("therapist");
-  const therapistProfileId = findTherapistProfileIdByEmployeeCode(session.employeeId);
+  const therapistProfileId = await findTherapistProfileIdByEmployeeCode(session.employeeId);
   if (!therapistProfileId) return { status: "invalid_input" };
 
   // Both come straight from the client (one of them from localStorage) —
@@ -171,8 +172,8 @@ export async function copyWeekAvailability(
   const count = Math.min(Math.max(1, Math.trunc(weekCount)), MAX_COPY_WEEKS);
   const today = todayIso();
 
-  const sourceScheduleByWeekday = Array.from({ length: 5 }, (_, i) =>
-    getDaySchedule(therapistProfileId, addDaysIso(sourceMondayIso, i))
+  const sourceScheduleByWeekday = await Promise.all(
+    Array.from({ length: 5 }, (_, i) => getDaySchedule(therapistProfileId, addDaysIso(sourceMondayIso, i)))
   );
 
   const targets: { dateIso: string; weekday: number }[] = [];
@@ -188,15 +189,15 @@ export async function copyWeekAvailability(
   // reject the whole copy rather than silently applying only the weeks
   // before the conflicting one.
   for (const target of targets) {
-    if (conflictsWithReservations(therapistProfileId, target.dateIso, sourceScheduleByWeekday[target.weekday].slots)) {
+    if (await conflictsWithReservations(therapistProfileId, target.dateIso, sourceScheduleByWeekday[target.weekday].slots)) {
       return { status: "conflict", dateIso: target.dateIso };
     }
   }
 
-  runInTransaction(() => {
+  await db.transaction(async (tx) => {
     for (const target of targets) {
       const source = sourceScheduleByWeekday[target.weekday];
-      applyDayAvailability(therapistProfileId, target.dateIso, source.slots, source.labels, today);
+      await applyDayAvailability(therapistProfileId, target.dateIso, source.slots, source.labels, today, tx);
     }
   });
 

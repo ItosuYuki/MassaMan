@@ -1,19 +1,38 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
+import { and, eq } from "drizzle-orm";
+import { db, type DbClient } from "@/lib/db";
+import { therapistBreaks, therapistShifts } from "@/db/schema";
 import { SLOT_COUNT, slotStartTime, type SlotState } from "@/lib/shift-slots";
 
 export type { SlotState } from "@/lib/shift-slots";
 
-type ShiftRow = { id: string; start_time: string; end_time: string };
-type BreakRow = { break_start: string; break_end: string; kind: SlotState; label: string | null };
+/** Postgres `time` columns come back as "HH:MM:SS" (see src/lib/db.ts's custom type) —
+ * every comparison/lookup below works in plain "HH:MM", so DB reads are normalized here. */
+function toHHMM(time: string): string {
+  return time.slice(0, 5);
+}
 
-const FIND_SHIFT = db.prepare(`
-  SELECT id, start_time, end_time FROM therapist_shifts WHERE therapist_id = ? AND work_date = ?
-`);
-const FIND_BREAKS_FOR_SHIFT = db.prepare(`
-  SELECT break_start, break_end, kind, label FROM therapist_breaks WHERE shift_id = ?
-`);
+type ShiftRow = { id: string; startTime: string; endTime: string };
+type BreakRow = { breakStart: string; breakEnd: string; kind: SlotState; label: string | null };
+
+async function findShift(dbClient: DbClient, therapistProfileId: string, dateIso: string): Promise<ShiftRow | null> {
+  const rows = await dbClient
+    .select({ id: therapistShifts.id, startTime: therapistShifts.startTime, endTime: therapistShifts.endTime })
+    .from(therapistShifts)
+    .where(and(eq(therapistShifts.therapistId, therapistProfileId), eq(therapistShifts.workDate, dateIso)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  return { id: row.id, startTime: toHHMM(row.startTime), endTime: toHHMM(row.endTime) };
+}
+
+async function findBreaksForShift(dbClient: DbClient, shiftId: string): Promise<BreakRow[]> {
+  const rows = await dbClient
+    .select({ breakStart: therapistBreaks.breakStart, breakEnd: therapistBreaks.breakEnd, kind: therapistBreaks.kind, label: therapistBreaks.label })
+    .from(therapistBreaks)
+    .where(eq(therapistBreaks.shiftId, shiftId));
+  return rows.map((r) => ({ breakStart: toHHMM(r.breakStart), breakEnd: toHHMM(r.breakEnd), kind: r.kind, label: r.label }));
+}
 
 export type DaySchedule = { slots: SlotState[]; labels: (string | null)[] };
 
@@ -43,19 +62,23 @@ function defaultDaySchedule(): DaySchedule {
  * saveDayAvailability) and, for "unavailable", its label, everything else
  * inside the range is "available".
  */
-export function getDaySchedule(therapistProfileId: string, dateIso: string): DaySchedule {
-  const shift = FIND_SHIFT.get(therapistProfileId, dateIso) as ShiftRow | undefined;
+export async function getDaySchedule(
+  therapistProfileId: string,
+  dateIso: string,
+  dbClient: DbClient = db
+): Promise<DaySchedule> {
+  const shift = await findShift(dbClient, therapistProfileId, dateIso);
   if (!shift) return defaultDaySchedule();
 
   const slots: SlotState[] = Array(SLOT_COUNT).fill("unavailable");
   const labels: (string | null)[] = Array(SLOT_COUNT).fill(null);
 
-  const breaks = FIND_BREAKS_FOR_SHIFT.all(shift.id) as BreakRow[];
+  const breaks = await findBreaksForShift(dbClient, shift.id);
   for (let i = 0; i < SLOT_COUNT; i++) {
     const start = slotStartTime(i);
     const end = slotStartTime(i + 1);
-    if (start >= shift.start_time && start < shift.end_time) {
-      const covering = breaks.find((b) => start < b.break_end && end > b.break_start);
+    if (start >= shift.startTime && start < shift.endTime) {
+      const covering = breaks.find((b) => start < b.breakEnd && end > b.breakStart);
       slots[i] = covering ? covering.kind : "available";
       labels[i] = covering && covering.kind === "unavailable" ? covering.label : null;
     }
@@ -64,18 +87,13 @@ export function getDaySchedule(therapistProfileId: string, dateIso: string): Day
 }
 
 /** Convenience wrapper for callers that only ever cared about the state, not the "その他" reason text. */
-export function getDayAvailability(therapistProfileId: string, dateIso: string): SlotState[] {
-  return getDaySchedule(therapistProfileId, dateIso).slots;
+export async function getDayAvailability(
+  therapistProfileId: string,
+  dateIso: string,
+  dbClient: DbClient = db
+): Promise<SlotState[]> {
+  return (await getDaySchedule(therapistProfileId, dateIso, dbClient)).slots;
 }
-
-const DELETE_BREAKS_FOR_SHIFT = db.prepare(`DELETE FROM therapist_breaks WHERE shift_id = ?`);
-const DELETE_SHIFT = db.prepare(`DELETE FROM therapist_shifts WHERE therapist_id = ? AND work_date = ?`);
-const INSERT_SHIFT = db.prepare(`
-  INSERT INTO therapist_shifts (id, therapist_id, work_date, start_time, end_time) VALUES (?, ?, ?, ?, ?)
-`);
-const INSERT_BREAK = db.prepare(`
-  INSERT INTO therapist_breaks (id, shift_id, break_start, break_end, kind, label) VALUES (?, ?, ?, ?, ?, ?)
-`);
 
 /**
  * Persists one day's tri-state grid, plus each "その他" (unavailable) run's
@@ -91,17 +109,24 @@ const INSERT_BREAK = db.prepare(`
  * day, with every slot recorded as its own break/unavailable run — otherwise
  * no shift row would exist at all and the next load would fall back to the
  * "no saved shift" default, silently discarding the day off.
+ *
+ * Pass `dbClient` as a transaction (from `db.transaction(async (tx) => ...)`)
+ * when saving several days together, so a failure partway through rolls back
+ * every day's write instead of leaving some days saved and others not.
  */
-export function saveDayAvailability(
+export async function saveDayAvailability(
   therapistProfileId: string,
   dateIso: string,
   slots: SlotState[],
-  labels: (string | null)[] = []
-): void {
-  const existing = FIND_SHIFT.get(therapistProfileId, dateIso) as ShiftRow | undefined;
+  labels: (string | null)[] = [],
+  dbClient: DbClient = db
+): Promise<void> {
+  const existing = await findShift(dbClient, therapistProfileId, dateIso);
   if (existing) {
-    DELETE_BREAKS_FOR_SHIFT.run(existing.id);
-    DELETE_SHIFT.run(therapistProfileId, dateIso);
+    await dbClient.delete(therapistBreaks).where(eq(therapistBreaks.shiftId, existing.id));
+    await dbClient
+      .delete(therapistShifts)
+      .where(and(eq(therapistShifts.therapistId, therapistProfileId), eq(therapistShifts.workDate, dateIso)));
   }
 
   const firstAvailable = slots.findIndex((s) => s === "available");
@@ -117,11 +142,19 @@ export function saveDayAvailability(
   const rangeStart = firstAvailable === -1 ? 0 : firstAvailable;
   const rangeEnd = firstAvailable === -1 ? slots.length - 1 : lastAvailable;
 
-  const shiftId = randomUUID();
-  INSERT_SHIFT.run(shiftId, therapistProfileId, dateIso, slotStartTime(rangeStart), slotStartTime(rangeEnd + 1));
+  const [{ id: shiftId }] = await dbClient
+    .insert(therapistShifts)
+    .values({
+      therapistId: therapistProfileId,
+      workDate: dateIso,
+      startTime: slotStartTime(rangeStart),
+      endTime: slotStartTime(rangeEnd + 1),
+    })
+    .returning({ id: therapistShifts.id });
 
   const labelAt = (i: number): string | null => (labels[i]?.trim() ? labels[i] : null);
 
+  const breakRows: (typeof therapistBreaks.$inferInsert)[] = [];
   let i = rangeStart;
   while (i <= rangeEnd) {
     if (slots[i] === "available") {
@@ -132,7 +165,17 @@ export function saveDayAvailability(
     const label = kind === "unavailable" ? labelAt(i) : null;
     const runStart = i;
     while (i <= rangeEnd && slots[i] === kind && (kind !== "unavailable" || labelAt(i) === label)) i++;
-    INSERT_BREAK.run(randomUUID(), shiftId, slotStartTime(runStart), slotStartTime(i), kind, label);
+    breakRows.push({
+      shiftId,
+      breakStart: slotStartTime(runStart),
+      breakEnd: slotStartTime(i),
+      kind: kind as "break" | "unavailable",
+      label,
+    });
+  }
+
+  if (breakRows.length > 0) {
+    await dbClient.insert(therapistBreaks).values(breakRows);
   }
 }
 
@@ -143,13 +186,14 @@ export function saveDayAvailability(
  * the therapist isn't available for anyone else in that slot either. Leaves
  * the rest of the day's availability (and every other slot's label) untouched.
  */
-export function markRangeUnavailable(
+export async function markRangeUnavailable(
   therapistProfileId: string,
   dateIso: string,
   rangeStart: string,
-  rangeEnd: string
-): void {
-  const { slots, labels } = getDaySchedule(therapistProfileId, dateIso);
+  rangeEnd: string,
+  dbClient: DbClient = db
+): Promise<void> {
+  const { slots, labels } = await getDaySchedule(therapistProfileId, dateIso, dbClient);
   for (let i = 0; i < SLOT_COUNT; i++) {
     const slotStart = slotStartTime(i);
     const slotEnd = slotStartTime(i + 1);
@@ -158,5 +202,5 @@ export function markRangeUnavailable(
       labels[i] = "予約キャンセル";
     }
   }
-  saveDayAvailability(therapistProfileId, dateIso, slots, labels);
+  await saveDayAvailability(therapistProfileId, dateIso, slots, labels, dbClient);
 }

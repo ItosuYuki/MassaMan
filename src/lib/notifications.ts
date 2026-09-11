@@ -1,5 +1,7 @@
 import "server-only";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { notificationSettings, users } from "@/db/schema";
 
 export type NotificationChannel = "in_app" | "email" | "slack";
 
@@ -9,39 +11,41 @@ export type NotificationSettings = {
   minutesBefore: number;
 };
 
-type NotificationSettingsRow = {
-  channel: NotificationChannel;
-  enabled: number;
-  minutes_before: number;
-};
-
-const FIND_BY_EMPLOYEE_CODE = db.prepare(`
-  SELECT ns.channel, ns.enabled, ns.minutes_before
-  FROM notification_settings ns
-  JOIN users u ON u.id = ns.user_id
-  WHERE u.employee_code = ? AND ns.channel = ?
-`);
-
-export function getNotificationSettings(
+export async function getNotificationSettings(
   employeeId: string,
   channel: NotificationChannel
-): NotificationSettings | null {
-  const row = FIND_BY_EMPLOYEE_CODE.get(employeeId, channel) as NotificationSettingsRow | undefined;
+): Promise<NotificationSettings | null> {
+  const rows = await db
+    .select({
+      channel: notificationSettings.channel,
+      enabled: notificationSettings.enabled,
+      minutesBefore: notificationSettings.minutesBefore,
+    })
+    .from(notificationSettings)
+    .innerJoin(users, eq(users.id, notificationSettings.userId))
+    .where(and(eq(users.employeeCode, employeeId), eq(notificationSettings.channel, channel)))
+    .limit(1);
+
+  const row = rows[0];
   if (!row) return null;
 
   return {
     channel: row.channel,
-    enabled: !!row.enabled,
-    minutesBefore: row.minutes_before,
+    enabled: row.enabled,
+    minutesBefore: row.minutesBefore,
   };
 }
 
-const SET_ENABLED = db.prepare(`
-  UPDATE notification_settings
-  SET enabled = ?
-  WHERE channel = ? AND user_id = (SELECT id FROM users WHERE employee_code = ?)
-`);
+export async function setNotificationEnabled(
+  employeeId: string,
+  channel: NotificationChannel,
+  enabled: boolean
+): Promise<void> {
+  const [user] = await db.select({ id: users.id }).from(users).where(eq(users.employeeCode, employeeId)).limit(1);
+  if (!user) return;
 
-export function setNotificationEnabled(employeeId: string, channel: NotificationChannel, enabled: boolean): void {
-  SET_ENABLED.run(enabled ? 1 : 0, channel, employeeId);
+  await db
+    .update(notificationSettings)
+    .set({ enabled })
+    .where(and(eq(notificationSettings.channel, channel), eq(notificationSettings.userId, user.id)));
 }

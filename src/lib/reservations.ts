@@ -1,8 +1,16 @@
 import "server-only";
+import { and, eq, gt, lt, ne } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { departments, reservations, rooms, users } from "@/db/schema";
 import { localDateIso, localTimeHHMM, parseIsoDateLocal, localWeekday, isValidDateIso } from "@/lib/local-date";
 import { getDayAvailability } from "@/lib/shifts";
 import { START_HOUR, END_HOUR, SLOT_COUNT, slotStartTime } from "@/lib/shift-slots";
+
+/** Postgres `time` columns come back as "HH:MM:SS" (see src/lib/db.ts's custom type) —
+ * every comparison below works in plain "HH:MM", so DB reads are normalized here. */
+function toHHMM(time: string): string {
+  return time.slice(0, 5);
+}
 
 export type TherapistReservation = {
   id: string;
@@ -15,60 +23,62 @@ export type TherapistReservation = {
   roomName: string | null;
 };
 
-type ReservationRow = {
+type ReservationJoinRow = {
   id: string;
-  reservation_date: string;
-  start_time: string;
-  end_time: string;
-  client_name: string;
-  department_name: string | null;
-  requested_note: string | null;
-  room_name: string | null;
+  reservationDate: string;
+  startTime: string;
+  endTime: string;
+  clientName: string;
+  departmentName: string | null;
+  requestedNote: string | null;
+  roomName: string | null;
 };
 
-const FIND_FOR_THERAPIST_ON_DATE = db.prepare(`
-  SELECT
-    r.id,
-    r.reservation_date,
-    r.start_time,
-    r.end_time,
-    u.name AS client_name,
-    d.name AS department_name,
-    r.requested_note,
-    rm.name AS room_name
-  FROM reservations r
-  JOIN users u ON u.id = r.user_id
-  LEFT JOIN departments d ON d.id = u.department_id
-  LEFT JOIN rooms rm ON rm.id = r.room_id
-  WHERE r.therapist_id = ?
-    AND r.reservation_date = ?
-    AND r.status = 'confirmed'
-  ORDER BY r.start_time
-`);
-
-function toReservation(row: ReservationRow): TherapistReservation {
+function toReservation(row: ReservationJoinRow): TherapistReservation {
   return {
     id: row.id,
-    dateIso: row.reservation_date,
-    startTime: row.start_time,
-    endTime: row.end_time,
-    clientName: row.client_name,
-    department: row.department_name,
-    note: row.requested_note,
-    roomName: row.room_name,
+    dateIso: row.reservationDate,
+    startTime: toHHMM(row.startTime),
+    endTime: toHHMM(row.endTime),
+    clientName: row.clientName,
+    department: row.departmentName,
+    note: row.requestedNote,
+    roomName: row.roomName,
   };
 }
 
-export function getReservationsForTherapist(therapistProfileId: string, dateIso: string): TherapistReservation[] {
-  const rows = FIND_FOR_THERAPIST_ON_DATE.all(therapistProfileId, dateIso) as ReservationRow[];
+const reservationJoinSelection = {
+  id: reservations.id,
+  reservationDate: reservations.reservationDate,
+  startTime: reservations.startTime,
+  endTime: reservations.endTime,
+  clientName: users.name,
+  departmentName: departments.name,
+  requestedNote: reservations.requestedNote,
+  roomName: rooms.name,
+};
+
+export async function getReservationsForTherapist(
+  therapistProfileId: string,
+  dateIso: string
+): Promise<TherapistReservation[]> {
+  const rows = await db
+    .select(reservationJoinSelection)
+    .from(reservations)
+    .innerJoin(users, eq(users.id, reservations.userId))
+    .leftJoin(departments, eq(departments.id, users.departmentId))
+    .leftJoin(rooms, eq(rooms.id, reservations.roomId))
+    .where(
+      and(
+        eq(reservations.therapistId, therapistProfileId),
+        eq(reservations.reservationDate, dateIso),
+        eq(reservations.status, "confirmed")
+      )
+    )
+    .orderBy(reservations.startTime);
+
   return rows.map(toReservation);
 }
-
-const CANCEL_FOR_THERAPIST = db.prepare(`
-  UPDATE reservations
-  SET status = 'cancelled', cancelled_at = datetime('now'), updated_at = datetime('now')
-  WHERE id = ? AND therapist_id = ? AND status = 'confirmed'
-`);
 
 /**
  * True once a reservation's own start time has arrived (or passed) — a session
@@ -92,18 +102,26 @@ export type CancelResult =
  * reservation has already started, since "cancelling" a session that already
  * happened (or is happening) doesn't mean anything.
  */
-export function cancelReservationForTherapist(reservationId: string, therapistProfileId: string, now: Date = new Date()): CancelResult {
-  const row = db
-    .prepare(
-      `SELECT r.id, r.reservation_date, r.start_time, r.end_time, u.name AS client_name,
-              d.name AS department_name, r.requested_note, rm.name AS room_name
-       FROM reservations r
-       JOIN users u ON u.id = r.user_id
-       LEFT JOIN departments d ON d.id = u.department_id
-       LEFT JOIN rooms rm ON rm.id = r.room_id
-       WHERE r.id = ? AND r.therapist_id = ? AND r.status = 'confirmed'`
+export async function cancelReservationForTherapist(
+  reservationId: string,
+  therapistProfileId: string,
+  now: Date = new Date()
+): Promise<CancelResult> {
+  const rows = await db
+    .select(reservationJoinSelection)
+    .from(reservations)
+    .innerJoin(users, eq(users.id, reservations.userId))
+    .leftJoin(departments, eq(departments.id, users.departmentId))
+    .leftJoin(rooms, eq(rooms.id, reservations.roomId))
+    .where(
+      and(
+        eq(reservations.id, reservationId),
+        eq(reservations.therapistId, therapistProfileId),
+        eq(reservations.status, "confirmed")
+      )
     )
-    .get(reservationId, therapistProfileId) as ReservationRow | undefined;
+    .limit(1);
+  const row = rows[0];
   if (!row) return { status: "not_found" };
 
   const reservation = toReservation(row);
@@ -111,48 +129,35 @@ export function cancelReservationForTherapist(reservationId: string, therapistPr
     return { status: "already_started" };
   }
 
-  const result = CANCEL_FOR_THERAPIST.run(reservationId, therapistProfileId);
-  if (result.changes === 0) return { status: "not_found" };
+  const result = await db
+    .update(reservations)
+    .set({ status: "cancelled", cancelledAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(reservations.id, reservationId),
+        eq(reservations.therapistId, therapistProfileId),
+        eq(reservations.status, "confirmed")
+      )
+    )
+    .returning({ id: reservations.id });
+  if (result.length === 0) return { status: "not_found" };
   return { status: "ok", reservation };
 }
-
-const FIND_OVERLAPPING_FOR_THERAPIST = db.prepare(`
-  SELECT u.name AS client_name FROM reservations r
-  JOIN users u ON u.id = r.user_id
-  WHERE r.therapist_id = ? AND r.reservation_date = ? AND r.status = 'confirmed' AND r.id != ?
-    AND r.start_time < ? AND r.end_time > ?
-`);
-
-// A bed is shared across all therapists, so this checks every therapist's
-// reservations on that bed — not just this one's — for the new time slot.
-const FIND_OVERLAPPING_FOR_ROOM = db.prepare(`
-  SELECT u.name AS client_name FROM reservations r
-  JOIN users u ON u.id = r.user_id
-  WHERE r.room_id = ? AND r.reservation_date = ? AND r.status = 'confirmed' AND r.id != ?
-    AND r.start_time < ? AND r.end_time > ?
-`);
-
-const RESCHEDULE = db.prepare(`
-  UPDATE reservations SET reservation_date = ?, start_time = ?, end_time = ?, updated_at = datetime('now')
-  WHERE id = ? AND therapist_id = ? AND status = 'confirmed'
-`);
-
-export type RescheduleResult =
-  | { status: "ok" }
-  | { status: "not_found" }
-  | { status: "past" }
-  | { status: "invalid_time" }
-  | { status: "conflict"; conflictingClientName: string };
 
 /**
  * True only if every slot the reservation's new [startTime, endTime) touches
  * is "available" on that day for this therapist — i.e. not a break, not
  * marked unavailable, and not outside their working hours. Only defends
  * against the *availability grid*; overlapping another reservation is
- * checked separately (FIND_OVERLAPPING_FOR_THERAPIST/ROOM).
+ * checked separately (findOverlappingForTherapist/Room).
  */
-function isRangeAvailable(therapistProfileId: string, dateIso: string, startTime: string, endTime: string): boolean {
-  const slots = getDayAvailability(therapistProfileId, dateIso);
+async function isRangeAvailable(
+  therapistProfileId: string,
+  dateIso: string,
+  startTime: string,
+  endTime: string
+): Promise<boolean> {
+  const slots = await getDayAvailability(therapistProfileId, dateIso);
   for (let i = 0; i < SLOT_COUNT; i++) {
     const slotStart = slotStartTime(i);
     const slotEnd = slotStartTime(i + 1);
@@ -168,14 +173,73 @@ const BUSINESS_HOURS_END = `${String(END_HOUR).padStart(2, "0")}:00`;
 
 const TIME_HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+async function findOverlappingForTherapist(
+  therapistProfileId: string,
+  dateIso: string,
+  excludeReservationId: string,
+  newEndTime: string,
+  newStartTime: string
+): Promise<{ clientName: string } | null> {
+  const rows = await db
+    .select({ clientName: users.name })
+    .from(reservations)
+    .innerJoin(users, eq(users.id, reservations.userId))
+    .where(
+      and(
+        eq(reservations.therapistId, therapistProfileId),
+        eq(reservations.reservationDate, dateIso),
+        eq(reservations.status, "confirmed"),
+        ne(reservations.id, excludeReservationId),
+        lt(reservations.startTime, newEndTime),
+        gt(reservations.endTime, newStartTime)
+      )
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+// A bed is shared across all therapists, so this checks every therapist's
+// reservations on that bed — not just this one's — for the new time slot.
+async function findOverlappingForRoom(
+  roomId: string,
+  dateIso: string,
+  excludeReservationId: string,
+  newEndTime: string,
+  newStartTime: string
+): Promise<{ clientName: string } | null> {
+  const rows = await db
+    .select({ clientName: users.name })
+    .from(reservations)
+    .innerJoin(users, eq(users.id, reservations.userId))
+    .where(
+      and(
+        eq(reservations.roomId, roomId),
+        eq(reservations.reservationDate, dateIso),
+        eq(reservations.status, "confirmed"),
+        ne(reservations.id, excludeReservationId),
+        lt(reservations.startTime, newEndTime),
+        gt(reservations.endTime, newStartTime)
+      )
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export type RescheduleResult =
+  | { status: "ok" }
+  | { status: "not_found" }
+  | { status: "past" }
+  | { status: "invalid_time" }
+  | { status: "conflict"; conflictingClientName: string };
+
 /** Moves a reservation to a new date/start time, keeping its original duration. */
-export function rescheduleReservationForTherapist(
+export async function rescheduleReservationForTherapist(
   reservationId: string,
   therapistProfileId: string,
   newDateIso: string,
   newStartTime: string,
   now: Date = new Date()
-): RescheduleResult {
+): Promise<RescheduleResult> {
   // A Server Action must validate its own inputs regardless of what the UI's
   // <input type="date">/<input type="time"> constrain — a direct call (or a
   // modified/replayed request) can send anything.
@@ -190,25 +254,40 @@ export function rescheduleReservationForTherapist(
     return { status: "past" };
   }
 
-  const current = db
-    .prepare(
-      `SELECT reservation_date, start_time, end_time, room_id FROM reservations
-       WHERE id = ? AND therapist_id = ? AND status = 'confirmed'`
+  const currentRows = await db
+    .select({
+      reservationDate: reservations.reservationDate,
+      startTime: reservations.startTime,
+      endTime: reservations.endTime,
+      roomId: reservations.roomId,
+    })
+    .from(reservations)
+    .where(
+      and(
+        eq(reservations.id, reservationId),
+        eq(reservations.therapistId, therapistProfileId),
+        eq(reservations.status, "confirmed")
+      )
     )
-    .get(reservationId, therapistProfileId) as
-    | { reservation_date: string; start_time: string; end_time: string; room_id: string | null }
-    | undefined;
-  if (!current) return { status: "not_found" };
+    .limit(1);
+  const currentRow = currentRows[0];
+  if (!currentRow) return { status: "not_found" };
+  const current = {
+    reservationDate: currentRow.reservationDate,
+    startTime: toHHMM(currentRow.startTime),
+    endTime: toHHMM(currentRow.endTime),
+    roomId: currentRow.roomId,
+  };
 
   // Same rule as cancelling: a session that already started can't be moved
   // either — only the *target* time being in the past was checked before.
-  if (hasReservationStarted(current.reservation_date, current.start_time, now)) {
+  if (hasReservationStarted(current.reservationDate, current.startTime, now)) {
     return { status: "past" };
   }
 
   const durationMinutes =
-    (Number(current.end_time.slice(0, 2)) * 60 + Number(current.end_time.slice(3, 5))) -
-    (Number(current.start_time.slice(0, 2)) * 60 + Number(current.start_time.slice(3, 5)));
+    (Number(current.endTime.slice(0, 2)) * 60 + Number(current.endTime.slice(3, 5))) -
+    (Number(current.startTime.slice(0, 2)) * 60 + Number(current.startTime.slice(3, 5)));
   const startTotal = Number(newStartTime.slice(0, 2)) * 60 + Number(newStartTime.slice(3, 5));
   const endTotal = startTotal + durationMinutes;
   const newEndTime = `${String(Math.floor(endTotal / 60)).padStart(2, "0")}:${String(endTotal % 60).padStart(2, "0")}`;
@@ -221,34 +300,42 @@ export function rescheduleReservationForTherapist(
   const weekday = localWeekday(parseIsoDateLocal(newDateIso));
   const isWeekday = weekday >= 1 && weekday <= 5;
   const withinBusinessHours = newStartTime >= BUSINESS_HOURS_START && newEndTime <= BUSINESS_HOURS_END;
-  if (!isWeekday || !withinBusinessHours || !isRangeAvailable(therapistProfileId, newDateIso, newStartTime, newEndTime)) {
+  if (
+    !isWeekday ||
+    !withinBusinessHours ||
+    !(await isRangeAvailable(therapistProfileId, newDateIso, newStartTime, newEndTime))
+  ) {
     return { status: "invalid_time" };
   }
 
-  const therapistConflict = FIND_OVERLAPPING_FOR_THERAPIST.get(
+  const therapistConflict = await findOverlappingForTherapist(
     therapistProfileId,
     newDateIso,
     reservationId,
     newEndTime,
     newStartTime
-  ) as { client_name: string } | undefined;
-  if (therapistConflict) return { status: "conflict", conflictingClientName: therapistConflict.client_name };
+  );
+  if (therapistConflict) return { status: "conflict", conflictingClientName: therapistConflict.clientName };
 
-  if (current.room_id) {
-    const roomConflict = FIND_OVERLAPPING_FOR_ROOM.get(
-      current.room_id,
-      newDateIso,
-      reservationId,
-      newEndTime,
-      newStartTime
-    ) as { client_name: string } | undefined;
-    if (roomConflict) return { status: "conflict", conflictingClientName: roomConflict.client_name };
+  if (current.roomId) {
+    const roomConflict = await findOverlappingForRoom(current.roomId, newDateIso, reservationId, newEndTime, newStartTime);
+    if (roomConflict) return { status: "conflict", conflictingClientName: roomConflict.clientName };
   }
 
   // Between the SELECT above and here, another request could have cancelled
-  // this same reservation — without checking `changes`, that race would still
-  // report "ok" while the DB silently kept the old date/time.
-  const result = RESCHEDULE.run(newDateIso, newStartTime, newEndTime, reservationId, therapistProfileId);
-  if (result.changes === 0) return { status: "not_found" };
+  // this same reservation — without checking the result, that race would
+  // still report "ok" while the DB silently kept the old date/time.
+  const result = await db
+    .update(reservations)
+    .set({ reservationDate: newDateIso, startTime: newStartTime, endTime: newEndTime, updatedAt: new Date() })
+    .where(
+      and(
+        eq(reservations.id, reservationId),
+        eq(reservations.therapistId, therapistProfileId),
+        eq(reservations.status, "confirmed")
+      )
+    )
+    .returning({ id: reservations.id });
+  if (result.length === 0) return { status: "not_found" };
   return { status: "ok" };
 }

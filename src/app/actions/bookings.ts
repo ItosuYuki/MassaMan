@@ -19,12 +19,12 @@ import { setNotificationEnabled } from "@/lib/notifications";
  */
 export async function cancelReservation(reservationId: string): Promise<CancelResult> {
   const session = await requireRole("therapist");
-  const therapistProfileId = findTherapistProfileIdByEmployeeCode(session.employeeId);
+  const therapistProfileId = await findTherapistProfileIdByEmployeeCode(session.employeeId);
   if (!therapistProfileId) return { status: "not_found" };
 
-  const result = cancelReservationForTherapist(reservationId, therapistProfileId);
+  const result = await cancelReservationForTherapist(reservationId, therapistProfileId);
   if (result.status === "ok") {
-    markRangeUnavailable(therapistProfileId, result.reservation.dateIso, result.reservation.startTime, result.reservation.endTime);
+    await markRangeUnavailable(therapistProfileId, result.reservation.dateIso, result.reservation.startTime, result.reservation.endTime);
     revalidatePath("/schedule");
   }
   return result;
@@ -36,14 +36,14 @@ export async function rescheduleReservation(
   newStartTime: string
 ): Promise<RescheduleResult> {
   const session = await requireRole("therapist");
-  const therapistProfileId = findTherapistProfileIdByEmployeeCode(session.employeeId);
+  const therapistProfileId = await findTherapistProfileIdByEmployeeCode(session.employeeId);
   if (!therapistProfileId) return { status: "not_found" };
 
   // Date/time format, past-target, weekday, business-hours, and target-slot
   // availability are all validated inside rescheduleReservationForTherapist
   // itself — this action must stay safe even if called directly, so none of
   // that lives only here.
-  const result = rescheduleReservationForTherapist(reservationId, therapistProfileId, newDateIso, newStartTime);
+  const result = await rescheduleReservationForTherapist(reservationId, therapistProfileId, newDateIso, newStartTime);
   if (result.status === "ok") {
     revalidatePath("/schedule");
   }
@@ -52,6 +52,6 @@ export async function rescheduleReservation(
 
 export async function setBookingNotificationEnabled(enabled: boolean) {
   const session = await requireRole("therapist");
-  setNotificationEnabled(session.employeeId, "slack", enabled);
+  await setNotificationEnabled(session.employeeId, "slack", enabled);
   revalidatePath("/schedule");
 }
