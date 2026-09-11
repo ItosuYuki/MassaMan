@@ -10,10 +10,19 @@ import {
   cancelReservation,
   rescheduleReservation,
   setBookingNotificationEnabled,
+  setBookingNotificationMinutes,
 } from "@/app/actions/bookings";
 import { SLOT_COUNT, SLOTS_PER_HOUR, slotStartTime, type SlotState } from "@/lib/shift-slots";
 import type { TherapistReservation } from "@/lib/reservations";
 import type { NotificationSettings } from "@/lib/notifications";
+import { NOTIFICATION_MINUTES_OPTIONS } from "@/lib/notification-options";
+
+const NOTIFICATION_TIMING_LABELS: Record<(typeof NOTIFICATION_MINUTES_OPTIONS)[number], string> = {
+  15: "15分前",
+  30: "30分前",
+  60: "1時間前",
+  120: "2時間前",
+};
 import { localDateIso } from "@/lib/local-date";
 
 type DayData = {
@@ -518,6 +527,13 @@ export function ScheduleView({
     });
   }
 
+  function handleSetNotificationMinutes(minutes: (typeof NOTIFICATION_MINUTES_OPTIONS)[number]) {
+    if (!notification || minutes === notification.minutesBefore) return;
+    startTransition(() => {
+      setBookingNotificationMinutes(minutes);
+    });
+  }
+
   function handleCloseHelp() {
     setShowHelp(false);
     window.localStorage.setItem(HELP_DISMISSED_KEY, "1");
@@ -978,14 +994,30 @@ export function ScheduleView({
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 py-2.5 border-t border-border">
-                  <div>
-                    <div className="text-[13px]">通知タイミング</div>
-                    <div className="text-[11px] text-ink-faint mt-0.5">予約時刻の何分前に届けるか</div>
-                  </div>
-                  <div className="flex items-center gap-1.5 bg-surface-2 border border-border rounded-lg px-2.5 py-1.5 shrink-0">
-                    <span className="mono text-[13px] font-bold text-accent-strong">{notification.minutesBefore}</span>
-                    <span className="text-xs text-ink-faint">分前</span>
+                <div className="py-2.5 border-t border-border">
+                  <div className="text-[13px]">通知タイミング</div>
+                  <div className="text-[11px] text-ink-faint mt-0.5 mb-2">予約時刻の何分前に届けるか</div>
+                  <div role="radiogroup" aria-label="通知タイミング" className="grid grid-cols-2 gap-1.5">
+                    {NOTIFICATION_MINUTES_OPTIONS.map((minutes) => {
+                      const selected = notification.minutesBefore === minutes;
+                      return (
+                        <button
+                          key={minutes}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          disabled={isPending}
+                          onClick={() => handleSetNotificationMinutes(minutes)}
+                          className={`text-xs rounded-lg py-1.5 border disabled:opacity-50 ${
+                            selected
+                              ? "bg-accent text-white border-accent"
+                              : "bg-surface-2 border-border text-ink-soft"
+                          }`}
+                        >
+                          {NOTIFICATION_TIMING_LABELS[minutes]}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>

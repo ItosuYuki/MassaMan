@@ -10,7 +10,8 @@ import {
   type RescheduleResult,
 } from "@/lib/reservations";
 import { markRangeUnavailable } from "@/lib/shifts";
-import { setNotificationEnabled } from "@/lib/notifications";
+import { setNotificationEnabled, setNotificationMinutesBefore } from "@/lib/notifications";
+import { NOTIFICATION_MINUTES_OPTIONS } from "@/lib/notification-options";
 
 /**
  * Cancelling from this (therapist-facing) screen means the therapist can't do
@@ -53,5 +54,13 @@ export async function rescheduleReservation(
 export async function setBookingNotificationEnabled(enabled: boolean) {
   const session = await requireRole("therapist");
   await setNotificationEnabled(session.employeeId, "slack", enabled);
+  revalidatePath("/schedule");
+}
+
+export async function setBookingNotificationMinutes(minutes: number) {
+  if (!NOTIFICATION_MINUTES_OPTIONS.includes(minutes as (typeof NOTIFICATION_MINUTES_OPTIONS)[number])) return;
+
+  const session = await requireRole("therapist");
+  await setNotificationMinutesBefore(session.employeeId, "slack", minutes);
   revalidatePath("/schedule");
 }

@@ -5,6 +5,8 @@ import { notificationSettings, users } from "@/db/schema";
 
 export type NotificationChannel = "in_app" | "email" | "slack";
 
+export { NOTIFICATION_MINUTES_OPTIONS } from "@/lib/notification-options";
+
 export type NotificationSettings = {
   channel: NotificationChannel;
   enabled: boolean;
@@ -36,16 +38,35 @@ export async function getNotificationSettings(
   };
 }
 
+async function findUserIdByEmployeeCode(employeeId: string): Promise<string | null> {
+  const [user] = await db.select({ id: users.id }).from(users).where(eq(users.employeeCode, employeeId)).limit(1);
+  return user?.id ?? null;
+}
+
 export async function setNotificationEnabled(
   employeeId: string,
   channel: NotificationChannel,
   enabled: boolean
 ): Promise<void> {
-  const [user] = await db.select({ id: users.id }).from(users).where(eq(users.employeeCode, employeeId)).limit(1);
-  if (!user) return;
+  const userId = await findUserIdByEmployeeCode(employeeId);
+  if (!userId) return;
 
   await db
     .update(notificationSettings)
     .set({ enabled })
-    .where(and(eq(notificationSettings.channel, channel), eq(notificationSettings.userId, user.id)));
+    .where(and(eq(notificationSettings.channel, channel), eq(notificationSettings.userId, userId)));
+}
+
+export async function setNotificationMinutesBefore(
+  employeeId: string,
+  channel: NotificationChannel,
+  minutesBefore: number
+): Promise<void> {
+  const userId = await findUserIdByEmployeeCode(employeeId);
+  if (!userId) return;
+
+  await db
+    .update(notificationSettings)
+    .set({ minutesBefore })
+    .where(and(eq(notificationSettings.channel, channel), eq(notificationSettings.userId, userId)));
 }
