@@ -60,7 +60,7 @@ export function DashboardShell({
         <div className="flex items-center justify-between px-8 py-5 border-b border-border bg-surface shrink-0">
           <div>
             <div className="flex items-center gap-2.5">
-              <h1 className="text-xl">マッサージ室 利用率ダッシュボード</h1>
+              <h1 className="text-xl">利用率ダッシュボード</h1>
             </div>
             <p className="mt-1 text-xs text-ink-faint">{subtitle}</p>
           </div>
@@ -73,7 +73,7 @@ export function DashboardShell({
                   href={hrefFor({ period: p.value })}
                   scroll={false}
                   className={`px-3.5 py-1.5 rounded-lg text-xs ${
-                    p.value === period ? "bg-surface text-ink font-medium shadow-sm" : "text-ink-faint"
+                    p.value === period ? "bg-surface text-ink font-medium" : "text-ink-faint"
                   }`}
                 >
                   {p.label}
@@ -93,7 +93,7 @@ export function DashboardShell({
                   className={`w-9 h-[21px] rounded-full relative shrink-0 ${compare ? "bg-accent" : "bg-surface-2 border border-border"}`}
                 >
                   <span
-                    className={`absolute top-0.5 w-[17px] h-[17px] rounded-full bg-white shadow ${compare ? "left-[17px]" : "left-0.5"}`}
+                    className={`absolute top-0.5 w-[17px] h-[17px] rounded-full bg-white border border-border ${compare ? "left-[17px]" : "left-0.5"}`}
                   />
                 </span>
                 <span className="text-xs text-ink">前期間と比較</span>
@@ -121,7 +121,7 @@ export function DashboardShell({
                   scope === "individual" ? "bg-role-admin text-white font-medium" : "text-ink-faint"
                 }`}
               >
-                施術者個人
+                個人
               </Link>
             </div>
           </div>

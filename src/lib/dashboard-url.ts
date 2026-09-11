@@ -17,26 +17,10 @@ export function withParams(
 
 /** Precomputes each checkbox's toggle-href server-side (a plain function can't
  * cross into a Client Component) for a multi-select param (e.g. "lines"). Zero
- * selected is a valid state (it means "show the plain trend, no breakdown"). */
-export function attributeCheckboxOptions<T extends string>(
-  all: readonly T[],
-  selected: T[],
-  labels: Record<T, string>,
-  paramKey: string,
-  basePath: string,
-  params: Record<string, string | undefined>
-): { value: T; label: string; checked: boolean; href: string }[] {
-  return all.map((value) => {
-    const checked = selected.includes(value);
-    const next = checked ? selected.filter((v) => v !== value) : [...selected, value];
-    return { value, label: labels[value], checked, href: withParams(basePath, params, { [paramKey]: next.join(",") }) };
-  });
-}
-
-/** Same shape as attributeCheckboxOptions, but for value-level choices whose
- * set varies by the currently-active dimension tab (e.g. 20代/30代/... under
- * 年代 vs 男性/女性 under 性別) — so it takes `{value,label}` pairs directly
- * instead of a `readonly T[]` + `Record<T,string>` fixed to one dimension. */
+ * selected is a valid state (it means "show the plain trend, no breakdown").
+ * The set of options varies by the currently-active dimension tab (e.g.
+ * 20代/30代/... under 年代 vs 男性/女性 under 性別), so it takes `{value,label}`
+ * pairs directly rather than a fixed `readonly T[]` + `Record<T,string>`. */
 export function valueCheckboxOptions(
   options: { value: string; label: string }[],
   selected: string[],

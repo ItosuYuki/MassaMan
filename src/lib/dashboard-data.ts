@@ -9,6 +9,7 @@ import {
   DEFAULT_FILTER,
   OVERALL_ATTRIBUTE_VALUE,
   attributeFilterFromLineSelection,
+  sanitizeLineValues,
 } from "@/lib/attribute-filter";
 
 export { HOURS };
@@ -20,11 +21,8 @@ export {
   DEFAULT_FILTER,
   OVERALL_ATTRIBUTE_VALUE,
   attributeFilterFromLineSelection,
+  sanitizeLineValues,
 };
-
-function isFiltered(filters: AttributeFilter): boolean {
-  return filters.ageBracket.length > 0 || filters.gender.length > 0 || filters.department.length > 0;
-}
 
 type ShiftRow = { therapist_id: string; work_date: string; start_time: string; end_time: string };
 type ReservationRow = {
@@ -112,23 +110,6 @@ async function fetchReservations(
   `;
 }
 
-/** Total *headcount* (role='user' employees) matching the given filters — the
- * denominator for headcount-based 利用率 calculations (used only when a
- * age/gender/department filter is actually active — see isFiltered()). */
-async function getHeadcount(
-  filters: AttributeFilter,
-  extra?: { attribute: AttributeKind; value: string }
-): Promise<number> {
-  const attrClause = attributeWhere(filters, extra);
-  const rows = await sql<{ n: number }[]>`
-    SELECT COUNT(*)::int as n FROM users u
-    LEFT JOIN departments d ON d.id = u.department_id
-    WHERE u.role = 'user' AND u.is_active = true
-      ${attrClause}
-  `;
-  return rows[0].n;
-}
-
 /** Distinct users (role='user') who booked at least once within `range`, matching filters. */
 async function getDistinctUserCount(
   range: DateRange,
@@ -160,6 +141,12 @@ function sumReservationMinutes(reservations: ReservationRow[]): number {
   return reservations.reduce((sum, r) => sum + reservationMinutes(r), 0);
 }
 
+/** Sum of actual treatment minutes only (no CLEANUP_BUFFER_MINUTES) — for
+ * 平均施術時間, which is labeled as treatment time, not occupied-room time. */
+function sumTreatmentMinutes(reservations: ReservationRow[]): number {
+  return reservations.reduce((sum, r) => sum + minutesBetween(r.start_time, r.end_time), 0);
+}
+
 function rate(numerator: number, denominator: number): number {
   return denominator > 0 ? Math.round((numerator / denominator) * 100) : 0;
 }
@@ -176,26 +163,27 @@ export type OverallStats = {
 };
 
 /**
- * 利用率. Two modes, chosen so the number always reads naturally:
- * - No attribute filter active: schedule occupancy — booked minutes ÷ available
- *   shift minutes (how full is the whole operation).
- * - A filter IS active (e.g. gender=男性): headcount ratio — 利用した社員数 ÷
- *   会社の全社員数 for that group, since "occupancy of male employees" isn't a
- *   coherent question, but "what fraction of male employees used it" is.
+ * 利用率 = 稼働時間ベース: booked minutes (of reservations matching `filters`) ÷
+ * total available shift minutes (unaffected by client-attribute filters, since
+ * availability is a room/therapist property, not a client one). Always this
+ * one basis regardless of whether a filter is active, so it stays directly
+ * comparable to the trend chart above it (getUtilizationTrend) and the
+ * per-attribute trend breakdown (getUtilizationTrendByAttribute) — the
+ * headcount-based 属性別 利用率 panel (getAttributeUtilization) answers a
+ * different question and is labeled separately in the UI.
  */
 export async function getOverallStats(range: DateRange, filters: AttributeFilter): Promise<OverallStats> {
   const reservations = await fetchReservations(range, filters);
   const bookedMinutes = sumReservationMinutes(reservations);
 
-  const utilizationRate = isFiltered(filters)
-    ? rate(await getDistinctUserCount(range, filters), await getHeadcount(filters))
-    : rate(bookedMinutes, sumShiftMinutes(await fetchShifts(range)));
+  const utilizationRate = rate(bookedMinutes, sumShiftMinutes(await fetchShifts(range)));
 
   return {
     utilizationRate,
     reservationCount: reservations.length,
     distinctUsers: new Set(reservations.map((r) => r.user_id)).size,
-    avgDurationMinutes: reservations.length > 0 ? Math.round(bookedMinutes / reservations.length) : 0,
+    avgDurationMinutes:
+      reservations.length > 0 ? Math.round(sumTreatmentMinutes(reservations) / reservations.length) : 0,
   };
 }
 
@@ -203,9 +191,9 @@ export type TrendPoint = { label: string; currentRate: number | null; previousRa
 
 /** 利用率の推移: bucketed by trendBuckets(period, range) — hour-of-day for "day",
  * weekday for "week", week-of-month for "month", month for "year". Same
- * occupancy-vs-headcount switch as getOverallStats (see its comment), so the
- * trend line and the stat tile always agree. Pass therapistId to scope the
- * whole trend to one therapist (used by the individual view). */
+ * 稼働時間ベース basis as getOverallStats (see its comment), so the trend line
+ * and the stat tile always agree. Pass therapistId to scope the whole trend
+ * to one therapist (used by the individual view). */
 export async function getUtilizationTrend(
   period: PeriodType,
   currentRange: DateRange,
@@ -213,17 +201,11 @@ export async function getUtilizationTrend(
   filters: AttributeFilter,
   therapistId?: string
 ): Promise<TrendPoint[]> {
-  const filtered = isFiltered(filters);
-  const headcount = filtered ? await getHeadcount(filters) : 0;
-
   async function seriesFor(outerRange: DateRange): Promise<(number | null)[]> {
     const buckets = trendBuckets(period, outerRange);
     return Promise.all(
       buckets.map(async (b) => {
-        if (filtered) {
-          return rateOrNull(await countUsersInBucket(b, outerRange, filters, therapistId), headcount);
-        }
-        const { booked, available } = await countMinutesInBucket(b, outerRange, therapistId);
+        const { booked, available } = await countMinutesInBucket(b, outerRange, therapistId, filters);
         return rateOrNull(booked, available);
       })
     );
@@ -292,19 +274,75 @@ export async function getUtilizationTrendByAttribute(
       const extra = { attribute, value: key };
       const previousBuckets = trendBuckets(period, previousRange);
       const points = await Promise.all(
-        buckets.map(async (b, i) => ({
-          label: b.label,
-          rate: rateOrNull(await countBookedMinutesInBucket(b, range, filters, therapistId, extra), available[i]),
-          previousRate: rateOrNull(
-            await countBookedMinutesInBucket(previousBuckets[i], previousRange, filters, therapistId, extra),
-            (await countMinutesInBucket(previousBuckets[i], previousRange, therapistId)).available,
-          ),
-          closed: b.closed,
-        }))
+        buckets.map(async (b, i) => {
+          const pb = previousBuckets[i];
+          const previousRate = pb
+            ? rateOrNull(
+                await countBookedMinutesInBucket(pb, previousRange, filters, therapistId, extra),
+                (await countMinutesInBucket(pb, previousRange, therapistId)).available
+              )
+            : null;
+          return {
+            label: b.label,
+            rate: rateOrNull(await countBookedMinutesInBucket(b, range, filters, therapistId, extra), available[i]),
+            previousRate,
+            closed: b.closed,
+          };
+        })
       );
       return { valueLabel: attributeLabel(attribute, key), points };
     })
   );
+}
+
+export type TrendChartData = { trend: TrendPoint[] | null; series: AttributeTrendSeries[] };
+
+/**
+ * The trend panel's entire dataset for one page render: either the plain
+ * occupancy line (nothing checked) or the checked values' breakdown lines,
+ * with the 「全体」reference line prepended when that box is checked.
+ *
+ * The 全体 line is computed with DEFAULT_FILTER, never the page's `filters` —
+ * it means "the whole population" BY DEFINITION, so it must not move when
+ * other checked boxes narrow the page. Passing `filters` here is what made
+ * 全体+20代 draw the 20代 line twice (invisible reference line) and made the
+ * 全体 line's value depend on which other boxes were checked.
+ *
+ * Shared by both dashboard routes so the 全体 and per-therapist views cannot
+ * drift apart on any of this.
+ */
+export async function getTrendChartData({
+  period,
+  range,
+  previousRange,
+  lineAttr,
+  lineValues,
+  filters,
+  therapistId,
+}: {
+  period: PeriodType;
+  range: DateRange;
+  previousRange: DateRange;
+  lineAttr: AttributeKind;
+  lineValues: string[];
+  filters: AttributeFilter;
+  therapistId?: string;
+}): Promise<TrendChartData> {
+  if (lineValues.length === 0) {
+    return { trend: await getUtilizationTrend(period, range, previousRange, filters, therapistId), series: [] };
+  }
+
+  const attributeKeys = lineValues.filter((v) => v !== OVERALL_ATTRIBUTE_VALUE);
+  const [overall, byAttribute] = await Promise.all([
+    lineValues.includes(OVERALL_ATTRIBUTE_VALUE)
+      ? getUtilizationTrend(period, range, previousRange, DEFAULT_FILTER, therapistId).then(overallAttributeSeries)
+      : null,
+    attributeKeys.length > 0
+      ? getUtilizationTrendByAttribute(period, range, previousRange, lineAttr, filters, therapistId, attributeKeys)
+      : [],
+  ]);
+
+  return { trend: null, series: [...(overall ? [overall] : []), ...byAttribute] };
 }
 
 /** Booked minutes within one bucket, narrowed to reservations matching `extra`
@@ -337,42 +375,19 @@ async function countBookedMinutesInBucket(
   return rows.reduce((sum, r) => sum + reservationMinutes(r), 0);
 }
 
-async function countUsersInBucket(
-  bucket: TrendBucket,
-  outerRange: DateRange,
-  filters: AttributeFilter,
-  therapistId?: string,
-  extra?: { attribute: AttributeKind; value: string }
-): Promise<number> {
-  const bucketClause =
-    bucket.kind === "hour"
-      ? sql`AND r.reservation_date BETWEEN ${outerRange.start} AND ${outerRange.end} AND EXTRACT(HOUR FROM r.start_time)::int = ${bucket.hour}`
-      : sql`AND r.reservation_date BETWEEN ${bucket.start} AND ${bucket.end}`;
-  const therapistClause = therapistId ? sql`AND r.therapist_id = ${therapistId}` : sql``;
-  const attrClause = attributeWhere(filters, extra);
-
-  const rows = await sql<{ n: number }[]>`
-    SELECT COUNT(DISTINCT r.user_id)::int as n
-    FROM reservations r
-    JOIN users u ON u.id = r.user_id
-    LEFT JOIN departments d ON d.id = u.department_id
-    WHERE r.status IN ('confirmed', 'completed')
-      ${bucketClause}
-      ${therapistClause}
-      ${attrClause}
-  `;
-  return rows[0].n;
-}
-
 /** Booked vs. available (shift) minutes within one trend bucket — the occupancy
- * building block shared by getUtilizationTrend and getVacancyTrend. */
+ * building block shared by getUtilizationTrend and getShiftBreakdownTrend.
+ * `filters` narrows the booked side to reservations matching an active
+ * attribute filter; callers that only need `available` (which is unaffected
+ * by client-attribute filters) can leave it at the default. */
 async function countMinutesInBucket(
   bucket: TrendBucket,
   outerRange: DateRange,
-  therapistId?: string
+  therapistId?: string,
+  filters: AttributeFilter = DEFAULT_FILTER
 ): Promise<{ booked: number; available: number }> {
   const shifts = await fetchShifts(outerRange, therapistId);
-  const reservations = await fetchReservations(outerRange, DEFAULT_FILTER, therapistId);
+  const reservations = await fetchReservations(outerRange, filters, therapistId);
 
   let available = 0;
   for (const s of shifts) {
@@ -400,12 +415,23 @@ async function countMinutesInBucket(
 
 export type ShiftBreakdownPoint = {
   label: string;
+  // Rounded independently to the nearest 0.1h for their own display — do NOT
+  // add these back together for a total. Since each is rounded separately,
+  // their sum can drift from the true total by up to ~0.1h (e.g. 0.75h and
+  // 0.25h independently round to 0.8h and 0.3h, summing to 1.1h though the
+  // real total is 1.0h). Use `totalHours` for the total and for sizing the
+  // bar; these two are for the in-bar labels only.
   bookedHours: number | null;
   vacantHours: number | null;
+  // Rounded from the raw available-minutes figure directly, not from
+  // bookedHours + vacantHours, so it reflects the true total rather than
+  // accumulated rounding error from the two independently-rounded halves.
+  totalHours: number | null;
   closed: boolean;
 };
 
-/** 出勤可能時間 = 施術時間（マッサージに使われた時間） + 空き時間（残り）、÷ 60 —
+/** 出勤可能時間 = 稼働時間（予約で埋まっていた時間。片付けバッファ込みの占有時間で、
+ * 平均施術時間とは異なり実施術時間だけを指すものではない） + 空き時間（残り）、÷ 60 —
  * a standalone 空き時間-only chart drew the same shift-time axis as the
  * utilization chart next to it but told only half the story (vacant time
  * alone doesn't say vacant relative to what); returning both halves lets the
@@ -426,6 +452,7 @@ export async function getShiftBreakdownTrend(
         label: b.label,
         bookedHours: available > 0 ? Math.round(Math.min(booked, available) / 6) / 10 : null,
         vacantHours: available > 0 ? Math.round(Math.max(0, available - booked) / 6) / 10 : null,
+        totalHours: available > 0 ? Math.round(available / 6) / 10 : null,
         closed: b.closed,
       };
     })
@@ -578,9 +605,10 @@ function clientAttributeShare(reservations: ReservationRow[], attribute: Attribu
  * instead of re-querying per dimension. */
 export async function getAllClientAttributeShare(
   range: DateRange,
-  therapistId: string
+  therapistId: string,
+  filters: AttributeFilter = DEFAULT_FILTER
 ): Promise<Record<AttributeKind, AttributeBucket[]>> {
-  const reservations = await fetchReservations(range, DEFAULT_FILTER, therapistId);
+  const reservations = await fetchReservations(range, filters, therapistId);
   return {
     age: clientAttributeShare(reservations, "age"),
     gender: clientAttributeShare(reservations, "gender"),
@@ -601,10 +629,9 @@ export type TherapistSummary = {
   avgDurationMinutes: number;
 };
 
-/** 個人利用率: occupancy (this therapist's booked ÷ shift minutes) when
- * unfiltered, headcount ratio (this therapist's distinct clients ÷ total
- * headcount) when a filter is active — same switch as getOverallStats, so
- * 全体平均 (計算方法は全社共通) is always a fair comparison. */
+/** 個人利用率: this therapist's booked ÷ shift minutes, always — same
+ * 稼働時間ベース basis as getOverallStats regardless of whether a filter is
+ * active, so 全体平均 (計算方法は全社共通) is always a fair comparison. */
 export async function getTherapistSummary(
   therapistId: string,
   range: DateRange,
@@ -628,19 +655,11 @@ export async function getTherapistSummary(
   const bookedMinutes = sumReservationMinutes(reservations);
   const distinctUsers = new Set(reservations.map((r) => r.user_id)).size;
 
-  let personalRate: number;
-  let overallAvgRate: number;
-  if (isFiltered(filters)) {
-    const headcount = await getHeadcount(filters);
-    personalRate = rate(await getDistinctUserCount(range, filters, therapistId), headcount);
-    overallAvgRate = rate(await getDistinctUserCount(range, filters), headcount);
-  } else {
-    personalRate = rate(bookedMinutes, sumShiftMinutes(await fetchShifts(range, therapistId)));
-    overallAvgRate = rate(
-      sumReservationMinutes(await fetchReservations(range, filters)),
-      sumShiftMinutes(await fetchShifts(range))
-    );
-  }
+  const personalRate = rate(bookedMinutes, sumShiftMinutes(await fetchShifts(range, therapistId)));
+  const overallAvgRate = rate(
+    sumReservationMinutes(await fetchReservations(range, filters)),
+    sumShiftMinutes(await fetchShifts(range))
+  );
 
   return {
     therapistId: profile.therapist_id,
@@ -652,7 +671,8 @@ export async function getTherapistSummary(
     overallAvgRate,
     reservationCount: reservations.length,
     distinctUsers,
-    avgDurationMinutes: reservations.length > 0 ? Math.round(bookedMinutes / reservations.length) : 0,
+    avgDurationMinutes:
+      reservations.length > 0 ? Math.round(sumTreatmentMinutes(reservations) / reservations.length) : 0,
   };
 }
 
