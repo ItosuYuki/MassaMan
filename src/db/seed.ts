@@ -3,7 +3,8 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { notLike } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import * as schema from "./schema";
-import { departments, users, therapistProfiles, rooms, therapistShifts, reservations } from "./schema";
+import { departments, users, therapistProfiles, rooms, therapistShifts, reservations, reviews } from "./schema";
+import { isNonWorkingDay } from "../lib/holidays";
 
 const pgClient = postgres(process.env.DATABASE_URL!);
 const db = drizzle(pgClient, { schema });
@@ -59,7 +60,7 @@ class SeededRandom {
 const DEPARTMENTS = ["開発部", "営業部", "総務部", "その他"] as const;
 const DEPARTMENT_WEIGHT: Record<string, number> = { 開発部: 0.42, 営業部: 0.27, 総務部: 0.18, その他: 0.13 };
 
-const ROOMS = ["第1マッサージ室", "第2マッサージ室"];
+const ROOMS = ["本社ビル4F マッサージルーム"];
 
 type NamedAccount = {
   employeeCode: string;
@@ -92,15 +93,15 @@ const AGE_BRACKETS = ["20s", "30s", "40s", "50s_plus"] as const;
 type AgeBracketValue = (typeof AGE_BRACKETS)[number];
 const AGE_BRACKET_WEIGHT: Record<AgeBracketValue, number> = { "20s": 0.28, "30s": 0.34, "40s": 0.24, "50s_plus": 0.14 };
 
-const THERAPIST_SPECIALTIES: Record<string, { specialty: string; bio: string }> = {
-  T2001: { specialty: "肩こり・腰痛", bio: "施術歴8年。前職はスポーツトレーナー。" },
-  T2002: { specialty: "首・肩の張り", bio: "施術歴5年。" },
-  T2003: { specialty: "腰痛・姿勢改善", bio: "施術歴6年。" },
-  T2004: { specialty: "眼精疲労・肩こり", bio: "施術歴4年。午前中心の勤務。" },
+const THERAPIST_SPECIALTIES: Record<string, { specialties: string[]; bio: string; room: string }> = {
+  T2001: { specialties: ["肩こり", "腰痛"], bio: "施術歴8年。前職はスポーツトレーナー。", room: "本社ビル4F マッサージルーム" },
+  T2002: { specialties: ["首こり", "肩こり"], bio: "施術歴5年。", room: "本社ビル4F マッサージルーム" },
+  T2003: { specialties: ["腰痛", "姿勢改善"], bio: "施術歴6年。", room: "本社ビル4F マッサージルーム" },
+  T2004: { specialties: ["眼精疲労", "肩こり"], bio: "施術歴4年。午前中心の勤務。", room: "本社ビル4F マッサージルーム" },
 };
 
 const THERAPIST_SHIFTS: Record<string, { start: number; end: number; baseUtil: number; recentBoost: number }> = {
-  T2001: { start: 9, end: 21, baseUtil: 0.6, recentBoost: 0.32 }, // trending up
+  T2001: { start: 9, end: 20, baseUtil: 0.6, recentBoost: 0.32 }, // trending up
   T2002: { start: 9, end: 20, baseUtil: 0.6, recentBoost: 0.0 },
   T2003: { start: 9, end: 19, baseUtil: 0.56, recentBoost: 0.0 },
   T2004: { start: 9, end: 13, baseUtil: 0.5, recentBoost: 0.0 }, // mornings only
@@ -109,7 +110,7 @@ const THERAPIST_SHIFTS: Record<string, { start: number; end: number; baseUtil: n
 // Relative demand per hour-of-day (lunch + evening peaks).
 const HOUR_WEIGHT: Record<number, number> = {
   9: 0.35, 10: 0.45, 11: 0.55, 12: 0.7, 13: 0.4, 14: 0.5,
-  15: 0.35, 16: 0.3, 17: 0.55, 18: 0.8, 19: 0.92, 20: 0.6,
+  15: 0.35, 16: 0.3, 17: 0.55, 18: 0.8, 19: 0.92,
 };
 
 const WEEKS_OF_HISTORY = 52;
@@ -170,6 +171,11 @@ async function insertReservationsInChunks(rows: (typeof reservations.$inferInser
     await db.insert(reservations).values(rows.slice(i, i + chunkSize));
   }
 }
+async function insertReviewsInChunks(rows: (typeof reviews.$inferInsert)[], chunkSize = 500) {
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    await db.insert(reviews).values(rows.slice(i, i + chunkSize));
+  }
+}
 
 async function build() {
   console.log("Truncating existing tables...");
@@ -184,6 +190,7 @@ async function build() {
   const roomRows = ROOMS.map((name) => ({ id: crypto.randomUUID(), name }));
   await db.insert(rooms).values(roomRows);
   const roomIds = roomRows.map((r) => r.id);
+  const roomIdByName = new Map<string, string>(roomRows.map((r) => [r.name, r.id]));
 
   const passwordHash = await bcrypt.hash(TEST_PASSWORD, 10);
 
@@ -210,8 +217,8 @@ async function build() {
     if (acc.role === "therapist") {
       const profileId = crypto.randomUUID();
       therapistProfileIdByCode.set(acc.employeeCode, profileId);
-      const { specialty, bio } = THERAPIST_SPECIALTIES[acc.employeeCode];
-      therapistProfileRows.push({ id: profileId, userId, specialties: [specialty], bio });
+      const { specialties, bio, room } = THERAPIST_SPECIALTIES[acc.employeeCode];
+      therapistProfileRows.push({ id: profileId, userId, specialties, bio, roomId: roomIdByName.get(room) });
     }
   }
   await db.insert(users).values(namedUserRows);
@@ -251,6 +258,7 @@ async function build() {
   const shiftRows: (typeof therapistShifts.$inferInsert)[] = [];
   const reservationRows: (typeof reservations.$inferInsert)[] = [];
   const roomBusy = new Map<string, Set<string>>(); // `${date}|${hour}` -> room ids in use
+  const userReservationWeeks = new Set<string>();
 
   for (const [code, cfg] of Object.entries(THERAPIST_SHIFTS)) {
     const therapistId = therapistProfileIdByCode.get(code)!;
@@ -260,9 +268,9 @@ async function build() {
     const scale = cfg.baseUtil / meanWeight;
 
     for (const d of dateRange(startDate, endDate)) {
-      if (pyWeekday(d) >= 5) continue; // weekends closed
-
       const dateStr = toISODate(d);
+      if (isNonWorkingDay(dateStr)) continue; // weekends & public holidays closed
+
       shiftRows.push({
         id: crypto.randomUUID(),
         therapistId,
@@ -292,20 +300,26 @@ async function build() {
         const endMinutes = h * 60 + duration;
         const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
 
+        const userId = rng.choices(allUserIds, userWeights);
+        const weekStart = addDays(d, -pyWeekday(d));
+        const userWeekKey = `${userId}|${toISODate(weekStart)}`;
         const busyKey = `${dateStr}|${h}`;
         const busy = roomBusy.get(busyKey) ?? new Set<string>();
         roomBusy.set(busyKey, busy);
         const availableRooms = roomIds.filter((r) => !busy.has(r));
         // All rooms already booked this hour (can happen: up to 4 therapists'
-        // shifts overlap 9am-1pm against only 2 rooms) — skip rather than
+        // shifts overlap 9am-1pm against only 1 room) — skip rather than
         // force a double-booking, which would violate the DB's
         // no_overlap_per_room EXCLUDE constraint.
         if (availableRooms.length === 0) continue;
         const roomId = rng.choice(availableRooms);
         busy.add(roomId);
 
-        const userId = rng.choices(allUserIds, userWeights);
         const status = rng.choices(["confirmed", "completed", "cancelled"] as const, [0.15, 0.8, 0.05]);
+        if (status !== "cancelled") {
+          if (userReservationWeeks.has(userWeekKey)) continue;
+          userReservationWeeks.add(userWeekKey);
+        }
 
         reservationRows.push({
           id: crypto.randomUUID(),
@@ -326,10 +340,36 @@ async function build() {
   console.log(`Inserting ${reservationRows.length} reservations...`);
   await insertReservationsInChunks(reservationRows);
 
+  // A small deterministic review set keeps the admin management screen useful
+  // immediately after seeding while preserving the same anonymous data shape
+  // as production reviews (the management query exposes departments only).
+  const reviewComments = [
+    "肩と首の張りが楽になりました。的確に凝りをほぐしてくれます。",
+    "丁寧な施術で安心できました。時間通りに終わるのも良いです。",
+    "腰の重さが改善しました。次回もぜひお願いしたいです。",
+    "力加減を確認しながら進めてくれて、とてもリラックスできました。",
+  ];
+  const reviewCountByTherapist = new Map<string, number>();
+  const reviewRows: (typeof reviews.$inferInsert)[] = [];
+  for (const reservation of reservationRows) {
+    if (reservation.status !== "completed") continue;
+    const count = reviewCountByTherapist.get(reservation.therapistId) ?? 0;
+    if (count >= 12) continue;
+    reviewCountByTherapist.set(reservation.therapistId, count + 1);
+    reviewRows.push({
+      id: crypto.randomUUID(),
+      reservationId: reservation.id!,
+      rating: [5, 4, 5, 5, 4][reviewRows.length % 5],
+      comment: reviewComments[reviewRows.length % reviewComments.length],
+    });
+  }
+  console.log(`Inserting ${reviewRows.length} reviews...`);
+  await insertReviewsInChunks(reviewRows);
+
   console.log(
     `Seeded: ${DEPARTMENTS.length} departments, ${namedUserRows.length + syntheticUserRows.length} users ` +
       `(${syntheticUserRows.length} synthetic), ${ROOMS.length} rooms, ${shiftRows.length} shifts, ` +
-      `${reservationRows.length} reservations (${toISODate(startDate)} to ${toISODate(endDate)}).`
+      `${reservationRows.length} reservations, ${reviewRows.length} reviews (${toISODate(startDate)} to ${toISODate(endDate)}).`
   );
 }
 

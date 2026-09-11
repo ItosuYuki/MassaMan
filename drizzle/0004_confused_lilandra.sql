@@ -1,0 +1,2 @@
+ALTER TABLE "therapist_profiles" ADD COLUMN "room_id" uuid;--> statement-breakpoint
+ALTER TABLE "therapist_profiles" ADD CONSTRAINT "therapist_profiles_room_id_rooms_id_fk" FOREIGN KEY ("room_id") REFERENCES "public"."rooms"("id") ON DELETE no action ON UPDATE no action;

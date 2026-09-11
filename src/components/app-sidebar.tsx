@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { AccountMenu } from "@/components/account-menu";
+import { logout } from "@/app/actions/auth";
 import type { Role } from "@/lib/session";
 
 const NAV_ITEMS: Record<Role, { href: string; label: string; icon: "calendar" | "chart" | "users" | "clock" | "person" }[]> = {
@@ -24,6 +24,7 @@ const ACTIVE_CLASSES: Record<Role, string> = {
 
 export function AppSidebar({ role, name, activePath }: { role: Role; name: string; activePath: string }) {
   const roleLabel = role === "user" ? "利用者" : role === "therapist" ? "マッサージ師" : "施設管理担当";
+  const initial = name.trim().charAt(0) || "?";
 
   return (
     <aside className="flex w-[220px] shrink-0 flex-col border-r border-border bg-surface py-6">
@@ -58,14 +59,20 @@ export function AppSidebar({ role, name, activePath }: { role: Role; name: strin
       </nav>
 
       <div className="grow" />
-      <div className="border-t border-border px-3 pt-4">
-        <AccountMenu
-          name={name}
-          roleLabel={roleLabel}
-          menuPlacement="up"
-          avatarClassName={ACTIVE_CLASSES[role]}
-        />
+      <div className="border-t border-border px-5 pt-4 flex items-center gap-2.5">
+        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium ${ACTIVE_CLASSES[role]}`}>
+          {initial}
+        </div>
+        <div className="min-w-0">
+          <div className="truncate text-xs">{name}</div>
+          <div className="text-[10px] text-ink-faint">{roleLabel}</div>
+        </div>
       </div>
+      <form action={logout} className="px-5 pt-3">
+        <button type="submit" className="text-[11px] text-destructive">
+          ログアウト
+        </button>
+      </form>
     </aside>
   );
 }

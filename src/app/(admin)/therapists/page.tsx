@@ -1,13 +1,8 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/dal";
 import { AppSidebar } from "@/components/app-sidebar";
+import { firstSearchParam, type SearchParamValue } from "@/lib/dashboard-params";
 import { listTherapistManagementItems, listTherapistReviews } from "@/lib/therapist-management";
-
-type SearchParamValue = string | string[] | undefined;
-
-function firstSearchParam(value: SearchParamValue): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
 
 function RatingStars({ rating, size = "normal" }: { rating: number | null; size?: "normal" | "small" }) {
   if (rating === null) return <span className="text-xs text-ink-faint">—</span>;

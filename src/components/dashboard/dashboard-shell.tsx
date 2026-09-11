@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { shiftReference, type PeriodType } from "@/lib/period";
+import type { PeriodType } from "@/lib/period";
 import { withParams } from "@/lib/dashboard-url";
 import { AttributeCheckboxes } from "@/components/dashboard/attribute-checkboxes";
+import { DatePicker } from "@/components/dashboard/date-picker";
 import { AppSidebar } from "@/components/app-sidebar";
 
 const PERIODS: { value: PeriodType; label: string }[] = [
@@ -57,12 +58,7 @@ export function DashboardShell({
         {/* Top bar */}
         <div className="flex items-center justify-between px-8 py-5 border-b border-border bg-surface shrink-0">
           <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-xl">マッサージ室 利用率ダッシュボード</h1>
-              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-role-admin-soft text-role-admin">
-                サンプルデータ
-              </span>
-            </div>
+            <h1 className="text-xl">利用率ダッシュボード</h1>
             <p className="mt-1 text-xs text-ink-faint">{subtitle}</p>
           </div>
 
@@ -72,27 +68,16 @@ export function DashboardShell({
                 <Link
                   key={p.value}
                   href={hrefFor({ period: p.value })}
+                  scroll={false}
                   className={`px-3.5 py-1.5 rounded-lg text-xs ${
-                    p.value === period ? "bg-surface text-ink font-medium shadow-sm" : "text-ink-faint"
+                    p.value === period ? "bg-surface text-ink font-medium" : "text-ink-faint"
                   }`}
                 >
                   {p.label}
                 </Link>
               ))}
             </div>
-            <div className="flex items-center justify-between gap-2 bg-surface-2 border border-border rounded-[10px] px-3.5 py-2 text-[13px] text-ink-soft w-[210px] shrink-0">
-              <Link href={hrefFor({ ref: shiftReference(period, refDate, -1) })} aria-label="前の期間" className="shrink-0">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4C5C6E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M15 18l-6-6 6-6" />
-                </svg>
-              </Link>
-              <span className="mono truncate">{rangeLabel}</span>
-              <Link href={hrefFor({ ref: shiftReference(period, refDate, 1) })} aria-label="次の期間" className="shrink-0">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4C5C6E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 18l6-6-6-6" />
-                </svg>
-              </Link>
-            </div>
+            <DatePicker period={period} refDate={refDate} rangeLabel={rangeLabel} basePath={basePath} params={params} />
           </div>
         </div>
 
@@ -100,12 +85,12 @@ export function DashboardShell({
           {/* Filter row */}
           <div className="bg-surface border border-border rounded-2xl px-4.5 py-3 flex items-center gap-4.5">
             <div className="flex items-center gap-4.5 flex-wrap min-w-0">
-              <Link href={hrefFor({ compare: compare ? "0" : "1" })} className="flex items-center gap-2 shrink-0">
+              <Link scroll={false} href={hrefFor({ compare: compare ? "0" : "1" })} className="flex items-center gap-2 shrink-0">
                 <span
                   className={`w-9 h-[21px] rounded-full relative shrink-0 ${compare ? "bg-accent" : "bg-surface-2 border border-border"}`}
                 >
                   <span
-                    className={`absolute top-0.5 w-[17px] h-[17px] rounded-full bg-white shadow ${compare ? "left-[17px]" : "left-0.5"}`}
+                    className={`absolute top-0.5 w-[17px] h-[17px] rounded-full bg-white border border-border ${compare ? "left-[17px]" : "left-0.5"}`}
                   />
                 </span>
                 <span className="text-xs text-ink">前期間と比較</span>
@@ -119,6 +104,7 @@ export function DashboardShell({
             <div className="flex bg-bg rounded-[11px] p-[3px] shrink-0">
               <Link
                 href={scopeHrefs.overall}
+                scroll={false}
                 className={`px-4.5 py-2 rounded-[9px] text-[13px] ${
                   scope === "overall" ? "bg-role-admin text-white font-medium" : "text-ink-faint"
                 }`}
@@ -127,11 +113,12 @@ export function DashboardShell({
               </Link>
               <Link
                 href={scopeHrefs.individual}
+                scroll={false}
                 className={`px-4.5 py-2 rounded-[9px] text-[13px] ${
                   scope === "individual" ? "bg-role-admin text-white font-medium" : "text-ink-faint"
                 }`}
               >
-                施術者個人
+                個人
               </Link>
             </div>
           </div>
@@ -153,6 +140,7 @@ export function AttributeTabs({ options }: { options: { value: string; label: st
         <Link
           key={o.value}
           href={o.href}
+          scroll={false}
           className={`px-3 py-1.5 rounded-2xl text-[11px] ${
             o.active ? "bg-accent-soft text-accent-strong font-medium" : "text-ink-faint"
           }`}

@@ -13,6 +13,7 @@ import {
   index,
   uniqueIndex,
   check,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
@@ -75,6 +76,7 @@ export const therapistProfiles = pgTable("therapist_profiles", {
   specialties: text("specialties").array(), // 得意分野（肩こり・腰痛 等）
   bio: text("bio"), // 経歴
   photoUrl: text("photo_url"),
+  roomId: uuid("room_id").references((): AnyPgColumn => rooms.id), // 担当する部屋（固定割当）
   isActive: boolean("is_active").notNull().default(true), // 休職中等に false
 });
 
@@ -123,7 +125,7 @@ export const therapistBreaks = pgTable(
 
 export const rooms = pgTable("rooms", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(), // 第1マッサージ室／第2マッサージ室
+  name: text("name").notNull(), // 本社ビル4F マッサージルーム
 });
 
 // ---------------------------------------------------------------------------

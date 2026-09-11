@@ -114,8 +114,39 @@ export function formatRangeLabel(period: PeriodType, range: DateRange): string {
   }
 }
 
-export function todayISO(): string {
-  return toISO(new Date());
+export function todayISO(now = new Date()): string {
+  // The service operates on Japanese business days. `toISOString()` uses UTC,
+  // which returns yesterday between 00:00 and 08:59 JST and can also make the
+  // server render disagree with a browser in Japan. Format in the application
+  // timezone explicitly so both environments choose the same reference date.
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const value = (type: "year" | "month" | "day") => parts.find((part) => part.type === type)?.value;
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
+/** Validates a `ref` searchParam before it reaches parseISO/rangeForPeriod — an
+ * unparseable date (e.g. `?ref=bad`) otherwise produces an Invalid Date that
+ * throws "Invalid time value" once formatted, a 500 for user-controlled input. */
+export function isValidISODate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [year, month, day] = s.split("-").map(Number);
+  const parsed = parseISO(s);
+
+  // `new Date(Date.UTC(2026, 1, 31))` silently rolls over to March 3rd. A
+  // finite Date check alone therefore accepts impossible calendar dates and
+  // lets the original invalid string reach PostgreSQL, where it raises a 500.
+  // Compare every component after parsing so only a real YYYY-MM-DD survives.
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
 }
 
 /** One point on the utilization/vacancy trend x-axis. `closed` marks a bucket
@@ -128,7 +159,7 @@ export type TrendBucket =
 
 const WEEKDAY_LABELS = ["月", "火", "水", "木", "金", "土", "日"];
 const MONTH_LABELS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
-export const HOURS = Array.from({ length: 12 }, (_, i) => i + 9); // 9..20
+export const HOURS = Array.from({ length: 11 }, (_, i) => i + 9); // 9..19
 
 /**
  * The x-axis buckets for a given period + range: hour-of-day for "day",

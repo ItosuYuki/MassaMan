@@ -6,22 +6,28 @@ export function FilterSelect({
   label,
   value,
   options,
+  className,
 }: {
   label: string;
   value: string;
   /** Each option carries the full URL to navigate to when selected (computed server-side). */
   options: { value: string; label: string; href: string }[];
+  /** Extra classes appended to the base pill styling — e.g. `w-full justify-between`
+   * to stretch it into a full-width control instead of the default compact pill. */
+  className?: string;
 }) {
   const router = useRouter();
 
   return (
-    <label className="flex items-center gap-1.5 rounded-[9px] border border-border bg-surface px-3 py-1.5 text-xs text-ink-soft">
+    <label
+      className={`flex items-center gap-1.5 rounded-[9px] border border-border bg-surface px-3 py-1.5 text-xs text-ink-soft${className ? ` ${className}` : ""}`}
+    >
       {label}：
       <select
         value={value}
         onChange={(e) => {
           const href = options.find((o) => o.value === e.target.value)?.href;
-          if (href) router.push(href);
+          if (href) router.push(href, { scroll: false });
         }}
         className="bg-transparent outline-none text-ink-soft"
       >
