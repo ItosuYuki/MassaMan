@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createSession, deleteSession } from "@/lib/session";
 import { findEmployeeByCode } from "@/lib/employees";
 import { homePathForRole } from "@/lib/dal";
+import { ensureDefaultNotificationSettings } from "@/lib/notification-settings";
 
 export type LoginFormState = {
   error?: string;
@@ -30,6 +31,7 @@ export async function login(
     return { error: "社員番号またはパスワードが正しくありません。" };
   }
 
+  await ensureDefaultNotificationSettings(employee.id);
   await createSession({
     employeeId: employee.employeeId,
     name: employee.name,

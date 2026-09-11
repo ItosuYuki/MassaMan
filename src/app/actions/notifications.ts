@@ -21,20 +21,17 @@ export async function saveNotificationSettings(
   const minutesBefore = Number(formData.get("minutesBefore"));
   if (!ALLOWED_MINUTES.has(minutesBefore)) return { error: "通知タイミングが正しくありません。" };
   const enabled = formData.get("enabled") === "on";
-  const channels = session.role === "user" ? (["in_app", "email", "slack"] as const) : (["slack"] as const);
   const userId = await getNotificationUserId(session.employeeId);
   const reservationCreatedEnabled = formData.get("reservationCreatedEnabled") === "on";
   const reservationCancelledEnabled = formData.get("reservationCancelledEnabled") === "on";
   const reminderEnabled = formData.get("reminderEnabled") === "on";
 
-  await Promise.all(channels.map((channel) =>
-    db.insert(notificationSettings)
-      .values({ userId, channel, enabled, minutesBefore, reservationCreatedEnabled, reservationCancelledEnabled, reminderEnabled })
-      .onConflictDoUpdate({
-        target: [notificationSettings.userId, notificationSettings.channel],
-        set: { enabled, minutesBefore, reservationCreatedEnabled, reservationCancelledEnabled, reminderEnabled },
-      })
-  ));
+  await db.insert(notificationSettings)
+    .values({ userId, channel: "slack", enabled, minutesBefore, reservationCreatedEnabled, reservationCancelledEnabled, reminderEnabled })
+    .onConflictDoUpdate({
+      target: [notificationSettings.userId, notificationSettings.channel],
+      set: { enabled, minutesBefore, reservationCreatedEnabled, reservationCancelledEnabled, reminderEnabled },
+    });
   revalidatePath(session.role === "user" ? "/booking" : "/schedule");
   return { saved: true };
 }

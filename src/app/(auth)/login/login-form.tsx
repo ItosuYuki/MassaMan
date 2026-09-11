@@ -4,24 +4,6 @@ import Image from "next/image";
 import { useActionState } from "react";
 import { login, type LoginFormState } from "@/app/actions/auth";
 
-function SsoIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <path d="M3 8h18" />
-    </svg>
-  );
-}
-
 function Wordmark({ tone }: { tone: "ink" | "white" }) {
   return (
     <span className="flex flex-col leading-tight">
@@ -113,22 +95,6 @@ export function LoginForm() {
         </div>
 
         <form action={formAction} className="w-full max-w-[340px] flex flex-col gap-3">
-          <button
-            type="button"
-            disabled
-            title="準備中: 社内SSOログインは現在ご利用いただけません"
-            className="flex items-center justify-center gap-2.5 h-[52px] lg:h-[50px] rounded-xl text-sm font-medium bg-accent text-white opacity-50 cursor-not-allowed"
-          >
-            <SsoIcon />
-            社内アカウントでログイン
-          </button>
-
-          <div className="flex items-center gap-2.5 text-ink-faint text-xs">
-            <div className="flex-1 h-px bg-border" />
-            または
-            <div className="flex-1 h-px bg-border" />
-          </div>
-
           <label className="flex flex-col gap-1.5">
             <span className="text-xs text-ink-soft">社員番号</span>
             <input
@@ -166,12 +132,8 @@ export function LoginForm() {
           </button>
         </form>
 
-        <p className="text-xs text-ink-faint text-center leading-loose max-w-[340px]">
-          ログイン後、利用者 / マッサージ師 / 管理者のいずれかのホーム画面に自動で振り分けられます。
-        </p>
-
         <div className="lg:hidden text-center text-[11px] text-ink-faint">
-          Ca-adv Tech Jam 社内システム
+          CAアドバンス
         </div>
       </div>
     </div>

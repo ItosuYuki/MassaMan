@@ -3,6 +3,7 @@ import "server-only";
 import { and, eq, gte } from "drizzle-orm";
 import { notificationDeliveries, notificationSettings, reservations, rooms, slackConnections, therapistProfiles, users } from "@/db/schema";
 import { db } from "@/lib/db";
+import { ensureDefaultNotificationSettings } from "@/lib/notification-settings";
 import { postSlackDm } from "@/lib/slack";
 import { createSlackNotificationContent, type SlackNotificationContent } from "@/lib/slack-notification-message";
 
@@ -30,57 +31,34 @@ type NotificationPayload = {
 const dateTimeLabel = (date: string, time: string) => `${date.replaceAll("-", "/")} ${time.slice(0, 5)}`;
 
 async function deliver(payload: NotificationPayload) {
+  await ensureDefaultNotificationSettings(payload.userId);
   const settings = await db
     .select({
-      channel: notificationSettings.channel,
-      enabled: notificationSettings.enabled,
       reservationCreatedEnabled: notificationSettings.reservationCreatedEnabled,
       reservationCancelledEnabled: notificationSettings.reservationCancelledEnabled,
       reminderEnabled: notificationSettings.reminderEnabled,
       slackUserId: slackConnections.slackUserId,
     })
     .from(notificationSettings)
-    .leftJoin(slackConnections, eq(slackConnections.userId, notificationSettings.userId))
-    .where(and(eq(notificationSettings.userId, payload.userId), eq(notificationSettings.enabled, true)));
+    .innerJoin(slackConnections, eq(slackConnections.userId, notificationSettings.userId))
+    .where(and(
+      eq(notificationSettings.userId, payload.userId),
+      eq(notificationSettings.channel, "slack"),
+      eq(notificationSettings.enabled, true)
+    ));
 
   const isEnabledForEvent = (setting: typeof settings[number]) =>
     payload.eventType === "reservation_created" ? setting.reservationCreatedEnabled
       : payload.eventType === "reservation_cancelled" ? setting.reservationCancelledEnabled
         : setting.reminderEnabled;
 
-  await Promise.all(settings.filter(isEnabledForEvent).map(async ({ channel, slackUserId }) => {
+  await Promise.all(settings.filter(isEnabledForEvent).map(async ({ slackUserId }) => {
     const { slack, ...defaultContent } = payload;
-    const channelPayload = channel === "slack" && slack
-      ? { ...defaultContent, ...slack }
-      : defaultContent;
+    const channelPayload = slack ? { ...defaultContent, ...slack } : defaultContent;
 
-    if (channel === "in_app") {
-      await db.insert(notificationDeliveries).values({ ...channelPayload, channel, sentAt: new Date() });
-      return;
-    }
-
-    if (channel === "email" && process.env.EMAIL_WEBHOOK_URL) {
-      await postWebhook(process.env.EMAIL_WEBHOOK_URL, { ...channelPayload, channel });
-    }
-    if (channel === "slack" && slackUserId) {
-      await postSlackDm(slackUserId, `${channelPayload.title}\n${channelPayload.body}`);
-    }
-
-    // 外部サービスへの送信結果も同じ履歴に残す。Webhook未設定時は送信待ちとして記録しない。
-    if ((channel === "email" && process.env.EMAIL_WEBHOOK_URL) || (channel === "slack" && slackUserId)) {
-      await db.insert(notificationDeliveries).values({ ...channelPayload, channel, sentAt: new Date() });
-    }
+    await postSlackDm(slackUserId, `${channelPayload.title}\n${channelPayload.body}`);
+    await db.insert(notificationDeliveries).values({ ...channelPayload, channel: "slack", sentAt: new Date() });
   }));
-}
-
-async function postWebhook(url: string, body: Record<string, unknown>) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-    cache: "no-store",
-  });
-  if (!response.ok) throw new Error(`通知Webhookへの送信に失敗しました (${response.status})`);
 }
 
 async function getReservationEvent(reservationId: string): Promise<ReservationEvent | null> {
@@ -207,9 +185,10 @@ export async function sendDueReservationReminders(now = new Date()) {
       .from(reservations)
       .innerJoin(notificationSettings, and(
         eq(notificationSettings.userId, reservations.userId),
-        eq(notificationSettings.channel, "in_app"),
+        eq(notificationSettings.channel, "slack"),
         enabledReminder
       ))
+      .innerJoin(slackConnections, eq(slackConnections.userId, reservations.userId))
       .where(upcomingReservation),
     db
       .select({
@@ -226,6 +205,7 @@ export async function sendDueReservationReminders(now = new Date()) {
         eq(notificationSettings.channel, "slack"),
         enabledReminder
       ))
+      .innerJoin(slackConnections, eq(slackConnections.userId, therapistProfiles.userId))
       .where(upcomingReservation),
   ]);
   const candidates = [
