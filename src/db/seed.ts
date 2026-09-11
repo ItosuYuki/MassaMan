@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { notLike } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import * as schema from "./schema";
-import { departments, users, therapistProfiles, rooms, therapistShifts, reservations } from "./schema";
+import { departments, users, therapistProfiles, rooms, therapistShifts, reservations, notificationSettings } from "./schema";
 import { isNonWorkingDay } from "../lib/holidays";
 
 const pgClient = postgres(process.env.DATABASE_URL!);
@@ -98,6 +98,14 @@ const THERAPIST_SPECIALTIES: Record<string, { specialties: string[]; bio: string
   T2002: { specialties: ["首こり", "肩こり"], bio: "施術歴5年。", room: "第2マッサージ室" },
   T2003: { specialties: ["腰痛", "姿勢改善"], bio: "施術歴6年。", room: "第1マッサージ室" },
   T2004: { specialties: ["眼精疲労", "肩こり"], bio: "施術歴4年。午前中心の勤務。", room: "第2マッサージ室" },
+};
+
+// Default notification channel/lead-time per role, mirroring the old mock-db's
+// NOTIFICATION_DEFAULTS (mock-db/build_mock_directory.py).
+const NOTIFICATION_DEFAULTS: Record<NamedAccount["role"], { channel: "in_app" | "slack"; minutesBefore: number }> = {
+  user: { channel: "in_app", minutesBefore: 30 },
+  therapist: { channel: "slack", minutesBefore: 10 },
+  admin: { channel: "in_app", minutesBefore: 30 },
 };
 
 const THERAPIST_SHIFTS: Record<string, { start: number; end: number; baseUtil: number; recentBoost: number }> = {
@@ -234,6 +242,20 @@ async function build() {
   await db.insert(users).values(syntheticUserRows);
   const syntheticUserIds = syntheticUserRows.map((u) => u.id!);
 
+  const notificationSettingsRows: (typeof notificationSettings.$inferInsert)[] = [
+    ...namedUserRows.map((u) => ({
+      id: crypto.randomUUID(),
+      userId: u.id!,
+      ...NOTIFICATION_DEFAULTS[NAMED_ACCOUNTS.find((a) => a.employeeCode === u.employeeCode)!.role],
+    })),
+    ...syntheticUserRows.map((u) => ({
+      id: crypto.randomUUID(),
+      userId: u.id!,
+      ...NOTIFICATION_DEFAULTS.user,
+    })),
+  ];
+  await db.insert(notificationSettings).values(notificationSettingsRows);
+
   const allUserIds = [
     ...NAMED_ACCOUNTS.filter((a) => a.role === "user").map((a) => userIdByCode.get(a.employeeCode)!),
     ...syntheticUserIds,
@@ -338,7 +360,8 @@ async function build() {
   console.log(
     `Seeded: ${DEPARTMENTS.length} departments, ${namedUserRows.length + syntheticUserRows.length} users ` +
       `(${syntheticUserRows.length} synthetic), ${ROOMS.length} rooms, ${shiftRows.length} shifts, ` +
-      `${reservationRows.length} reservations (${toISODate(startDate)} to ${toISODate(endDate)}).`
+      `${reservationRows.length} reservations, ${notificationSettingsRows.length} notification settings ` +
+      `(${toISODate(startDate)} to ${toISODate(endDate)}).`
   );
 }
 

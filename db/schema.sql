@@ -95,7 +95,9 @@ CREATE TABLE therapist_breaks (
   id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   shift_id     uuid NOT NULL REFERENCES therapist_shifts(id),
   break_start  time NOT NULL,
-  break_end    time NOT NULL
+  break_end    time NOT NULL,
+  kind         text NOT NULL DEFAULT 'break' CHECK (kind IN ('break', 'unavailable')), -- 休憩 or その他（施術者都合で不可）
+  label        text -- kind='unavailable'のときの理由テキスト（例:「外出」「研修」）。任意入力
 );
 
 CREATE INDEX idx_therapist_breaks_shift_id ON therapist_breaks(shift_id);
@@ -106,7 +108,7 @@ CREATE INDEX idx_therapist_breaks_shift_id ON therapist_breaks(shift_id);
 
 CREATE TABLE rooms (
   id   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name text NOT NULL -- 第1マッサージ室／第2マッサージ室
+  name text NOT NULL -- ベッドA／ベッドB／ベッドC
 );
 
 ALTER TABLE therapist_profiles ADD CONSTRAINT therapist_profiles_room_id_fkey
@@ -148,7 +150,7 @@ EXCLUDE USING gist (
   ) WITH &&
 ) WHERE (status = 'confirmed');
 
--- 部屋が2室しかないため、部屋の二重利用も同様に防止
+-- ベッドは3床しかないため、ベッドの二重利用も同様に防止
 ALTER TABLE reservations ADD CONSTRAINT no_overlap_per_room
 EXCLUDE USING gist (
   room_id WITH =,

@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>勤務時間登録画面 操作性改善モック（① 〜 ④）</title>
+<style>
+
+  @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap');
+  :root{
+    --bg:#EEF3F9; --surface:#FFFFFF; --surface-2:#E2E9F2; --border:#CBD7E3;
+    --ink:#1B2733; --ink-soft:#4C5C6E; --ink-faint:#7C8CA0;
+    --accent:#2B5C99; --accent-strong:#1D4370; --accent-soft:#DCE7F5;
+    --role-therapist:#2F5E86; --role-therapist-soft:#DDE7F0;
+    --amber:#9C6A1E; --amber-soft:#F2E4C8;
+    --destructive:#C4523A;
+    --green:#2E7D4F; --green-soft:#DCEEE2;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",sans-serif;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3{font-family:"Shippori Mincho",serif;margin:0;}
+  .mono{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;}
+
+  .page{max-width:1180px;margin:0 auto;padding:32px 24px 80px;}
+  .intro{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px 24px;margin-bottom:24px;}
+  .intro h1{font-size:20px;margin-bottom:8px;}
+  .intro p{font-size:13px;color:var(--ink-soft);line-height:1.7;margin:0 0 10px;}
+  .intro ol{margin:0;padding-left:20px;font-size:12.5px;color:var(--ink-soft);line-height:1.9;}
+  .intro li b{color:var(--ink);}
+
+  .demo-shell{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px 24px;position:relative;}
+
+  /* ---- ① first-time help ---- */
+  .help-banner{display:flex;align-items:flex-start;gap:12px;background:var(--role-therapist-soft);border:1px solid var(--role-therapist);border-radius:12px;padding:14px 16px;margin-bottom:16px;}
+  .help-banner.hidden{display:none;}
+  .help-banner .icon{width:22px;height:22px;border-radius:50%;background:var(--role-therapist);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:1px;}
+  .help-banner .content{flex-grow:1;}
+  .help-banner .content .steps{display:flex;gap:18px;flex-wrap:wrap;margin-top:8px;}
+  .help-banner .step{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--role-therapist);}
+  .help-banner .step .n{width:18px;height:18px;border-radius:50%;background:#fff;border:1.5px solid var(--role-therapist);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
+  .help-banner .close{background:none;border:none;color:var(--role-therapist);cursor:pointer;font-size:12px;padding:2px 6px;flex-shrink:0;}
+  .reopen-help{display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--ink-faint);font-size:11px;cursor:pointer;}
+  .reopen-help:hover{background:var(--surface-2);}
+
+  .toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+  .tools{display:flex;gap:6px;}
+  .tool-btn{display:flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:8px;border:1px solid transparent;background:none;color:var(--ink-faint);font-size:12.5px;cursor:pointer;font-family:inherit;}
+  .tool-btn .sw{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .tool-btn.sel{background:var(--role-therapist-soft);color:var(--role-therapist);font-weight:700;border-color:var(--role-therapist);}
+  .tool-btn:hover:not(.sel){background:var(--surface-2);}
+
+  /* ---- ④ save status: unsaved cells render faded ---- */
+  .save-btn{height:34px;padding:0 18px;border-radius:10px;border:none;background:var(--role-therapist);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;}
+  .save-btn:disabled{opacity:.45;cursor:default;}
+
+  /* ---- grid ---- */
+  .grid-wrap{position:relative;}
+  .legend-note{font-size:11px;color:var(--ink-faint);margin:0 0 10px;}
+  .grid{display:grid;grid-template-columns:60px repeat(5,1fr);gap:4px;user-select:none;}
+  .day-label{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:var(--ink-soft);padding-bottom:4px;}
+  .time-label{display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:11px;color:var(--ink-faint);}
+
+  .cell{
+    height:26px; border-radius:7px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:500; position:relative;
+    border:2px solid transparent;
+  }
+  .cell.available{background:var(--role-therapist-soft);color:var(--role-therapist);}
+  .cell.unavailable{background:rgba(124,140,160,.35);color:var(--ink-soft);border-color:rgba(124,140,160,.7);}
+  .cell.break{background:var(--amber-soft);color:var(--amber);}
+  .cell:hover{outline:2px solid rgba(27,39,51,.28); outline-offset:-2px;}
+  /* Not yet saved: fade until "この内容で保存する" is pressed, then snaps back
+     to full color — the cell itself is the save-state indicator, no separate
+     banner/chip needed. */
+  .cell.unsaved{opacity:.45;transition:opacity .15s;}
+
+  /* ---- ② time badge while dragging ---- */
+  .time-badge{position:fixed;background:var(--accent-strong);color:#fff;font-size:11px;font-weight:700;padding:4px 8px;border-radius:6px;pointer-events:none;z-index:30;font-family:"JetBrains Mono",monospace;display:none;}
+  .time-badge.on{display:block;}
+
+  .callouts{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:24px;}
+  .callout{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;}
+  .callout .num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--role-therapist);color:#fff;font-size:12px;font-weight:700;margin-right:8px;}
+  .callout h3{display:inline;font-size:14px;font-family:"Noto Sans JP",sans-serif;font-weight:700;}
+  .callout .before{font-size:12px;color:var(--destructive);margin:8px 0 4px;}
+  .callout .after{font-size:12px;color:var(--ink-soft);line-height:1.7;margin:0;}
+
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="intro">
+    <h1>勤務時間登録グリッド — 操作性改善モック</h1>
+    <p>いただいた4つの指摘に対する改善案を、実際に触って確認できる形にしました。下のグリッドは本物と同じ挙動（ツール選択→クリック/ドラッグで塗る）をする簡易再現版です。</p>
+    <ol>
+      <li><b>①</b> ホバーしてもカーソルが変わらず押せるか分かりにくい／初見での操作方法説明が無い</li>
+      <li><b>②</b> ドラッグ中、右側の列ほど左端の時刻ラベルとの対応が分かりにくい</li>
+      <li><b>③</b> ドラッグを間違えた時の修正コストが高い(ボタンを選び直す必要がある)</li>
+      <li><b>④</b> 保存済みか編集中か分かりにくい</li>
+    </ol>
+  </div>
+
+  <div class="demo-shell">
+
+    <!-- ① 初見ガイド -->
+    <div class="help-banner" id="helpBanner">
+      <div class="icon">?</div>
+      <div class="content">
+        <div style="font-size:13px;font-weight:700;">はじめての方へ — 使い方は3ステップです</div>
+        <div class="steps">
+          <div class="step"><span class="n">1</span>下のボタンで状態を選ぶ</div>
+          <div class="step"><span class="n">2</span>マスをクリック／ドラッグで反映</div>
+          <div class="step"><span class="n">3</span>「この内容で保存する」を押す</div>
+        </div>
+      </div>
+      <button class="close" onclick="hideHelp()">閉じる ✕</button>
+    </div>
+
+    <div class="toolbar">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="tools" id="tools">
+          <button class="tool-btn sel" data-state="available"><span class="sw" style="background:var(--role-therapist)"></span>施術可能</button>
+          <button class="tool-btn" data-state="unavailable"><span class="sw" style="background:rgba(124,140,160,.55);border:1.5px solid rgba(124,140,160,.9)"></span>不可</button>
+          <button class="tool-btn" data-state="break"><span class="sw" style="background:var(--amber-soft);border:1.5px solid var(--amber)"></span>休憩</button>
+        </div>
+        <button class="reopen-help" onclick="showHelp()">? 使い方をもう一度見る</button>
+      </div>
+
+      <button class="save-btn" id="saveBtn" disabled onclick="doSave()">この内容で保存する</button>
+    </div>
+
+    <p class="legend-note">① マスにカーソルを乗せると指カーソル＋枠線でハイライトされます。② マスに触れるだけで、カーソルのすぐ横に時刻バッジが出ます。④ 未保存のマスは薄く表示され、保存すると元の色に戻ります。</p>
+
+    <div class="grid-wrap">
+      <div class="grid" id="grid"></div>
+      <div class="time-badge" id="timeBadge"></div>
+    </div>
+
+  </div>
+
+  <div class="callouts">
+    <div class="callout">
+      <span class="num">①</span><h3>押せることが伝わる見た目 + 初見ガイド</h3>
+      <p class="before">Before: ホバーしてもカーソルが矢印のまま。説明も無い。</p>
+      <p class="after">After: <code>cursor:pointer</code> と枠線ハイライトを追加。加えて初回訪問時は3ステップの使い方バナーを自動表示し、閉じた後も「?」ボタンからいつでも再表示できるようにしました。</p>
+    </div>
+    <div class="callout">
+      <span class="num">②</span><h3>右端の列でも今どの時刻か迷わない</h3>
+      <p class="before">Before: 時刻ラベルが左端にしか無く、右の列にいくほど今どの行かたどりにくい。</p>
+      <p class="after">After: マスに触れる(ホバーする)だけで、カーソルのすぐ横に「14:30」のような時刻バッジを表示します。ドラッグしていなくても出るので、押す前にも今どの時刻か確認できます。行全体のハイライトなどは無く、これだけのシンプルな対応にしました。</p>
+    </div>
+    <div class="callout">
+      <span class="num">③</span><h3>ボタンを選び直さなくても修正できる</h3>
+      <p class="before">Before: 行き過ぎたら、上のボタンで「施術可能」を選び直して再度ドラッグし直す必要があった。</p>
+      <p class="after">After: 上で選んだツールは、ボタンを押し直さない限りずっと使えます(同じ色を離れた場所に何度でも塗れます)。<b>直前の1回のドラッグで塗った範囲と重なるドラッグをした時だけ</b>「修正」と自動判定し、開始セルのまだ正しい状態を吸い取って上書きします。範囲が重ならなければ、選んだツールのまま塗られるので、「延長したい」時と「戻したい」時を自動で区別できます。</p>
+    </div>
+    <div class="callout">
+      <span class="num">④</span><h3>保存状態がひと目で分かる</h3>
+      <p class="before">Before: 保存済みか、編集途中かの見分けが付きにくい。</p>
+      <p class="after">After: 編集したセル自体を半透明にして「未保存」を表現します。「この内容で保存する」を押すと、全セルが元の色(通常の濃さ)に戻ります。全体のステータス表示(チップ)は設けず、セルの色だけで表現するシンプルな方式にしました。変更が無い間は保存ボタンもグレーアウトします。</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const DAYS = ["月 9/7","火 9/8","水 9/9","木 9/10","金 9/11"];
+  const START_HOUR = 9;
+  const SLOT_COUNT = 8; // 9:00-13:00, 30min steps (kept short for this mock)
+  const TOOL_LABELS = { available: "施術可能", unavailable: "不可", break: "休憩" };
+
+  let selectedTool = "available"; // sticky: only changes via a tool button click
+  let isPainting = false;
+
+  // True right after a tool button click, until the *next* gesture consumes
+  // it. That gesture always honors the explicitly-picked tool, even if it
+  // overlaps lastEdit's range — otherwise, deliberately re-touching a cell
+  // you just painted (to pick a *different* state for it) would get
+  // misread as "revert this", silently ignoring the button you just pressed.
+  let explicitToolPending = false;
+
+  // The most recent *finished* gesture's (column, row-range) — used to tell a
+  // "fix the overshoot" drag apart from an "extend with the same tool" drag,
+  // even though both start by dragging from an untouched neighboring cell.
+  // Only consulted when explicitToolPending is false (see above).
+  let lastEdit = null; // { col, start, end } inclusive row range
+
+  // The gesture currently in progress. `sampledValue` is whatever the start
+  // cell held *before* this gesture touched it — used only if the gesture
+  // turns out to be a correction. `isCorrection` flips true the moment the
+  // drag reaches into `lastEdit`'s range, and once true stays true for the
+  // rest of this gesture; every cell touched so far is then repainted with
+  // `sampledValue` instead of `selectedTool`.
+  let gesture = null; // { col, sampledValue, isCorrection, touchedRows: Set }
+
+  // initial state: all "available"
+  let state = Array.from({length: SLOT_COUNT}, () => Array(5).fill("available"));
+  // Last-saved snapshot — a cell renders faded whenever it differs from this,
+  // and doSave() re-syncs this to match state, snapping every cell back to
+  // full color. This *is* the save-state indicator; no separate chip.
+  let savedState = state.map(row => row.slice());
+
+  function slotTime(i){
+    const totalMin = i*30;
+    const h = START_HOUR + Math.floor(totalMin/60);
+    const m = totalMin % 60;
+    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+  }
+
+  function render(){
+    const grid = document.getElementById("grid");
+    grid.innerHTML = "";
+    grid.appendChild(document.createElement("div"));
+    DAYS.forEach(d => {
+      const el = document.createElement("div");
+      el.className = "day-label";
+      el.textContent = d;
+      grid.appendChild(el);
+    });
+    for(let r=0;r<SLOT_COUNT;r++){
+      const label = document.createElement("div");
+      label.className = "time-label";
+      label.dataset.row = r;
+      label.textContent = slotTime(r);
+      grid.appendChild(label);
+      for(let c=0;c<5;c++){
+        const cell = document.createElement("div");
+        cell.className = cellClassName(r,c);
+        cell.dataset.row = r;
+        cell.dataset.col = c;
+        cell.textContent = TOOL_LABELS[state[r][c]] === "施術可能" ? "" : TOOL_LABELS[state[r][c]];
+        cell.addEventListener("mousedown", onCellDown);
+        cell.addEventListener("mouseenter", onCellEnter);
+        grid.appendChild(cell);
+      }
+    }
+  }
+
+  function cellClassName(r,c){
+    const unsaved = state[r][c] !== savedState[r][c];
+    return "cell " + state[r][c] + (unsaved ? " unsaved" : "");
+  }
+
+  function paint(r,c,newState){
+    if(state[r][c] === newState) return;
+    state[r][c] = newState;
+    refreshCellVisual(r,c);
+    updateSaveButton();
+  }
+
+  function selectTool(newState){
+    selectedTool = newState;
+    document.querySelectorAll(".tool-btn").forEach(b => b.classList.toggle("sel", b.dataset.state === newState));
+  }
+
+  function refreshCellVisual(r,c){
+    const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+    if(!cell) return;
+    cell.className = cellClassName(r,c);
+    cell.textContent = state[r][c] === "available" ? "" : TOOL_LABELS[state[r][c]];
+  }
+
+  function onCellDown(e){
+    isPainting = true;
+    const r = +e.currentTarget.dataset.row, c = +e.currentTarget.dataset.col;
+    // A button click just before this gesture always wins, regardless of
+    // overlap — consumed here so only *this* gesture gets the override.
+    const honorButton = explicitToolPending;
+    explicitToolPending = false;
+    gesture = { col: c, sampledValue: state[r][c], isCorrection: false, honorButton, touchedRows: new Set() };
+    enterCell(r, c);
+    moveBadge(e, r);
+  }
+  function onCellEnter(e){
+    const r = +e.currentTarget.dataset.row, c = +e.currentTarget.dataset.col;
+    moveBadge(e, r);
+    if(!isPainting || !gesture || c !== gesture.col) return; // ignore cross-column moves
+    enterCell(r, c);
+  }
+
+  function enterCell(r, c){
+    gesture.touchedRows.add(r);
+    if(
+      !gesture.honorButton &&
+      !gesture.isCorrection &&
+      lastEdit && lastEdit.col === c && r >= lastEdit.start && r <= lastEdit.end
+    ){
+      // This drag has reached into the range the *previous* gesture just
+      // painted — that means it's a correction, not a fresh extension.
+      // Repaint everything touched so far in *this* gesture with the
+      // sampled (still-correct) value instead of the selected tool.
+      gesture.isCorrection = true;
+      gesture.touchedRows.forEach(row => paint(row, c, gesture.sampledValue));
+      return;
+    }
+    paint(r, c, gesture.isCorrection ? gesture.sampledValue : selectedTool);
+  }
+
+  function moveBadge(e,r){
+    const badge = document.getElementById("timeBadge");
+    badge.textContent = slotTime(r);
+    badge.style.left = (e.clientX + 16) + "px";
+    badge.style.top = (e.clientY - 10) + "px";
+    badge.classList.add("on");
+  }
+
+  window.addEventListener("mouseup", () => {
+    if(gesture && gesture.touchedRows.size){
+      const rows = [...gesture.touchedRows];
+      lastEdit = { col: gesture.col, start: Math.min(...rows), end: Math.max(...rows) };
+    }
+    gesture = null;
+    isPainting = false;
+  });
+
+  document.getElementById("grid").addEventListener("mouseleave", () => {
+    document.getElementById("timeBadge").classList.remove("on");
+  });
+
+  document.getElementById("tools").addEventListener("click", (e) => {
+    const btn = e.target.closest(".tool-btn");
+    if(!btn) return;
+    selectTool(btn.dataset.state);
+    explicitToolPending = true;
+  });
+
+  function hasUnsavedCells(){
+    return state.some((row,r) => row.some((s,c) => s !== savedState[r][c]));
+  }
+  function updateSaveButton(){
+    document.getElementById("saveBtn").disabled = !hasUnsavedCells();
+  }
+  function doSave(){
+    savedState = state.map(row => row.slice());
+    render();
+    updateSaveButton();
+  }
+
+  function hideHelp(){ document.getElementById("helpBanner").classList.add("hidden"); }
+  function showHelp(){ document.getElementById("helpBanner").classList.remove("hidden"); }
+
+  render();
+</script>
+
+</body>
+</html>

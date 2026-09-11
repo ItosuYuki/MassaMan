@@ -98,12 +98,14 @@ erDiagram
 | shift_id | uuid FK → therapist_shifts, NOT NULL | |
 | break_start | time, NOT NULL | |
 | break_end | time, NOT NULL | |
+| kind | text, NOT NULL DEFAULT 'break' | `break`（休憩）/ `unavailable`（その他・施術不可）。シフト範囲内の一区間が空いていない理由を区別する |
+| label | text, NULL可 | `kind='unavailable'`のときの自由記述の理由（例:「外出」「研修」）。任意入力 |
 
 #### `rooms`（施術室）
 | column | type | note |
 |---|---|---|
 | id | uuid PK | |
-| name | text, NOT NULL | 第1マッサージ室／第2マッサージ室 |
+| name | text, NOT NULL | ベッドA／ベッドB／ベッドC |
 
 #### `reservations`（予約） ※最重要テーブル
 | column | type | note |
@@ -158,7 +160,7 @@ EXCLUDE USING gist (
   ) WITH &&
 ) WHERE (status = 'confirmed');
 
--- 部屋が2室しかないため、部屋の二重利用も同様に防止
+-- ベッドは3床しかないため、ベッドの二重利用も同様に防止
 ALTER TABLE reservations ADD CONSTRAINT no_overlap_per_room
 EXCLUDE USING gist (
   room_id WITH =,

@@ -33,3 +33,8 @@ export const db = drizzle(pgClient, { schema });
  * for its dynamic, hand-composed aggregation SQL (see
  * docs/superpowers/specs/2026-09-10-postgres-migration-design.md §3). */
 export const sql = pgClient;
+
+/** Either `db` itself or the transaction-scoped client Drizzle passes into
+ * `db.transaction(async (tx) => ...)` — shift/break writes that must commit
+ * or roll back together take this instead of the module-level `db` directly. */
+export type DbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
