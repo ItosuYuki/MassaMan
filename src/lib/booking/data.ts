@@ -195,6 +195,7 @@ export async function getTherapistCandidates(
         name: users.name,
         gender: users.gender,
         specialties: therapistProfiles.specialties,
+        roomId: therapistProfiles.roomId,
       })
       .from(therapistProfiles)
       .innerJoin(users, eq(users.id, therapistProfiles.userId))
@@ -204,15 +205,16 @@ export async function getTherapistCandidates(
 
   const requestedEnd = startMinutes + durationMinutes + CLEANUP_BUFFER_MINUTES;
   const dayReservations = weekReservations.filter((r) => r.reservationDate === date);
+  const overlapping = dayReservations.filter((r) => {
+    const { start, end } = occupiedRange(r);
+    return rangesOverlap(start, end, startMinutes, requestedEnd);
+  });
 
-  const busyTherapistIds = new Set(
-    dayReservations
-      .filter((r) => {
-        const { start, end } = occupiedRange(r);
-        return rangesOverlap(start, end, startMinutes, requestedEnd);
-      })
-      .map((r) => r.therapistId)
-  );
+  const busyTherapistIds = new Set(overlapping.map((r) => r.therapistId));
+  // Each therapist has a fixed room (therapist_profiles.room_id) — several therapists can
+  // share one, so one of them being busy makes the room (and thus everyone assigned to it)
+  // unavailable too, even with no direct conflict of their own.
+  const busyRoomIds = new Set(overlapping.map((r) => r.roomId).filter((id): id is string => id !== null));
 
   const options: TherapistOption[] = therapistRows.map((t) => {
     const reservationCountInWeek = weekReservations.filter(
@@ -223,7 +225,7 @@ export async function getTherapistCandidates(
       name: t.name,
       gender: t.gender,
       specialty: (t.specialties ?? []).join("・"),
-      isAvailable: !busyTherapistIds.has(t.id),
+      isAvailable: !busyTherapistIds.has(t.id) && !(t.roomId !== null && busyRoomIds.has(t.roomId)),
       occupancyRate: computeOccupancyRate({
         reservationCountInWeek,
         businessDaysPerWeek: BUSINESS_DAYS.length,
@@ -284,7 +286,7 @@ export async function createReservation(input: {
   }
 
   const therapist = await db.query.therapistProfiles.findFirst({
-    columns: { id: true, isActive: true },
+    columns: { id: true, isActive: true, roomId: true },
     where: eq(therapistProfiles.id, input.therapistId),
   });
   if (!therapist || !therapist.isActive) {
@@ -299,14 +301,10 @@ export async function createReservation(input: {
   });
 
   const therapistAlreadyBooked = overlapping.some((r) => r.therapistId === therapist.id);
-  if (therapistAlreadyBooked) {
-    return { ok: false, error: "この枠は埋まりました。別の枠を選んでください。" };
-  }
-
-  const roomRows = await db.select({ id: rooms.id }).from(rooms);
-  const bookedRoomIds = new Set(overlapping.map((r) => r.roomId));
-  const freeRoom = roomRows.find((room) => !bookedRoomIds.has(room.id));
-  if (!freeRoom) {
+  // The therapist's own fixed room (therapist_profiles.room_id) — several therapists can
+  // share one, so it may already be taken by someone else even with no direct conflict.
+  const roomAlreadyBooked = therapist.roomId !== null && overlapping.some((r) => r.roomId === therapist.roomId);
+  if (therapistAlreadyBooked || roomAlreadyBooked) {
     return { ok: false, error: "この枠は埋まりました。別の枠を選んでください。" };
   }
 
@@ -316,7 +314,7 @@ export async function createReservation(input: {
       .values({
         userId,
         therapistId: therapist.id,
-        roomId: freeRoom.id,
+        roomId: therapist.roomId,
         reservationDate: input.date,
         startTime: minutesToTime(input.startMinutes),
         endTime: minutesToTime(input.startMinutes + input.durationMinutes),
