@@ -94,7 +94,7 @@ export function NotificationSettingsCard({ role, settings }: { role: "user" | "t
       <div className="border-t border-border py-2">
         <div className="mb-1.5 text-[11px] font-medium text-ink-soft">通知するイベント</div>
         {[
-          ["reservationCreatedEnabled", "予約完了・新規予約"],
+          ["reservationCreatedEnabled", "予約完了"],
           ["reservationCancelledEnabled", "キャンセル"],
           ["reminderEnabled", "予約前リマインド"],
         ].map(([name, label]) => (
