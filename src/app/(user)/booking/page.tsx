@@ -1,16 +1,19 @@
+import { Suspense } from "react";
 import { requireRole } from "@/lib/dal";
-import { RoleHome } from "@/components/role-home";
+import { AppSidebar } from "@/components/app-sidebar";
+import { BookingClient } from "./BookingClient";
 
-export default async function BookingHomePage() {
+export default async function BookingPage() {
   const session = await requireRole("user");
 
   return (
-    <RoleHome
-      roleLabel="利用者"
-      roleTint="user"
-      name={session.name}
-      employeeId={session.employeeId}
-      note="予約画面（design/user-booking-*.html）はこのタスクの対象外です。別Issueで実装予定です。"
-    />
+    <div className="flex min-h-dvh bg-bg">
+      <AppSidebar role="user" name={session.name} activePath="/booking" />
+      <main className="grow overflow-y-auto">
+        <Suspense>
+          <BookingClient />
+        </Suspense>
+      </main>
+    </div>
   );
 }
