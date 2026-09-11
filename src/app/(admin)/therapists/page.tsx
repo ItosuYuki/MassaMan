@@ -46,7 +46,7 @@ export default async function TherapistManagementPage({
         </div>
 
         <main className="grow overflow-y-auto px-8 py-5 flex flex-col gap-4">
-          <section className="overflow-x-auto rounded-2xl border border-border bg-surface px-5 py-4">
+          <section className="shrink-0 overflow-x-auto rounded-2xl border border-border bg-surface px-5 py-4">
             <div className="min-w-[920px]">
               <div className="grid grid-cols-[1.6fr_1.4fr_1fr_.9fr_.9fr_.9fr] items-center gap-2.5 px-1 pb-2.5">
                 <span className="text-[11px] text-ink-faint">氏名</span>
