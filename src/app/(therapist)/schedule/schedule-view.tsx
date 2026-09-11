@@ -2,18 +2,28 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { logout } from "@/app/actions/auth";
 import { saveWeekAvailability, copyWeekAvailability } from "@/app/actions/shifts";
-import { cancelReservation, rescheduleReservation, setBookingNotificationEnabled } from "@/app/actions/bookings";
+import {
+  cancelReservation,
+  rescheduleReservation,
+  setBookingNotificationEnabled,
+} from "@/app/actions/bookings";
 import { SLOT_COUNT, SLOTS_PER_HOUR, slotStartTime, type SlotState } from "@/lib/shift-slots";
 import type { TherapistReservation } from "@/lib/reservations";
 import type { NotificationSettings } from "@/lib/notifications";
+import { localDateIso } from "@/lib/local-date";
 
 type DayData = {
   dateIso: string;
   label: string;
   slots: SlotState[];
+  // Free-text reason for each "unavailable" ("その他") slot — null everywhere
+  // else. A plain "不可" gave no clue why a slot was blocked, so this lets the
+  // therapist say ("外出", "研修", …) when they paint one.
+  labels: (string | null)[];
   events: TherapistReservation[];
   isPast: boolean;
   isToday: boolean;
@@ -33,19 +43,22 @@ const STATE_CLASSES: Record<SlotState, string> = {
   break: "bg-amber-soft text-amber",
 };
 
+// "不可" on its own didn't say why a slot was blocked — renamed "その他" and
+// paired with a free-text reason (DayData.labels) the therapist fills in.
 const STATE_LABELS: Record<SlotState, string> = {
   available: "施術可能",
-  unavailable: "不可",
+  unavailable: "その他",
   break: "休憩",
 };
 
 const TOOL_OPTIONS: { state: SlotState; label: string; swatchClass: string }[] = [
   { state: "available", label: "施術可能", swatchClass: "bg-role-therapist-soft" },
-  { state: "unavailable", label: "不可", swatchClass: "bg-ink-faint/35 border-2 border-ink-faint/70" },
+  { state: "unavailable", label: "その他", swatchClass: "bg-ink-faint/35 border-2 border-ink-faint/70" },
   { state: "break", label: "休憩", swatchClass: "bg-amber-soft" },
 ];
 
 const CLIPBOARD_KEY = "massaman:schedule-clipboard-monday";
+const HELP_DISMISSED_KEY = "massaman:schedule-help-dismissed";
 // Half of the old 44px hour row: slots are now 30min, but same-state slots
 // still merge into one band (buildDayCells), so a full "available" morning
 // still renders at the same height it always did — only an actual break/
@@ -78,18 +91,28 @@ function findEventsForSlot(events: TherapistReservation[], slotIndex: number): T
 }
 
 type DayCell =
-  | { kind: "slot"; slotIndex: number; span: number; state: SlotState; locked: boolean }
+  | { kind: "slot"; slotIndex: number; span: number; state: SlotState; label: string | null; locked: boolean; unsaved: boolean }
   | { kind: "events"; slotIndex: number; span: number; events: TherapistReservation[] };
 
 // Walks a day's slots once and merges runs into single spanning cells: a
 // reservation merges forward only while the exact same single reservation
 // continues (a >1hr appointment stays one appointment), and a plain slot
-// merges forward while the state stays the same — a whole "施術可能 9:00-12:00"
-// morning becomes one band, and only a break/unavailable/reservation slot
-// interrupts it. See the week-view mockup this mirrors. `lockedUpTo` (today's
-// current-time boundary) also forces a break in the band, even across equal
-// states, so the locked and editable portions never share one cell.
-function buildDayCells(day: DayData): DayCell[] {
+// merges forward while the state (and, for "その他", its reason label) stays
+// the same — a whole "施術可能 9:00-12:00" morning becomes one band, and only a
+// break/その他/reservation slot interrupts it, and two differently-labeled
+// "その他" runs painted back to back never look like one band. See the
+// week-view mockup this mirrors. `lockedUpTo` (today's current-time boundary)
+// also forces a break in the band, even across equal states, so the locked
+// and editable portions never share one cell — and so does a difference in
+// "unsaved" status (against `savedSlots`/`savedLabels`), so a half-edited
+// band doesn't paint its still-saved half faded too.
+function buildDayCells(day: DayData, savedSlots: SlotState[], savedLabels: (string | null)[]): DayCell[] {
+  const stateAt = (i: number): SlotState => day.slots[i] ?? "unavailable";
+  const labelAt = (i: number): string | null => (stateAt(i) === "unavailable" ? (day.labels[i] ?? null) : null);
+  const isUnsavedAt = (i: number): boolean =>
+    (savedSlots[i] ?? "unavailable") !== stateAt(i) ||
+    (stateAt(i) === "unavailable" && (savedLabels[i] ?? null) !== labelAt(i));
+
   const cells: DayCell[] = [];
   let i = 0;
   while (i < SLOT_COUNT) {
@@ -107,18 +130,22 @@ function buildDayCells(day: DayData): DayCell[] {
       cells.push({ kind: "events", slotIndex: i, span: 1, events });
       i += 1;
     } else {
-      const state = day.slots[i] ?? "unavailable";
+      const state = stateAt(i);
+      const label = labelAt(i);
       const locked = i < day.lockedUpTo;
+      const unsaved = isUnsavedAt(i);
       let span = 1;
       while (
         i + span < SLOT_COUNT &&
         i + span < day.lockedUpTo === locked && // don't cross the today lock boundary
+        isUnsavedAt(i + span) === unsaved &&
         findEventsForSlot(day.events, i + span).length === 0 &&
-        (day.slots[i + span] ?? "unavailable") === state
+        stateAt(i + span) === state &&
+        labelAt(i + span) === label
       ) {
         span++;
       }
-      cells.push({ kind: "slot", slotIndex: i, span, state, locked });
+      cells.push({ kind: "slot", slotIndex: i, span, state, label, locked, unsaved });
       i += span;
     }
   }
@@ -164,6 +191,7 @@ export function ScheduleView({
   weekLabel,
   prevWeekIso,
   nextWeekIso,
+  currentWeekMondayIso,
   notification,
   nowTime,
 }: {
@@ -172,12 +200,21 @@ export function ScheduleView({
   weekLabel: string;
   prevWeekIso: string;
   nextWeekIso: string;
+  currentWeekMondayIso: string;
   notification: NotificationSettings | null;
   nowTime: string;
 }) {
+  const router = useRouter();
+  const [jumpDate, setJumpDate] = useState("");
   const [days, setDays] = useState(initialDays);
+  // The last-saved snapshot of each day's slots — a cell renders faded
+  // whenever it differs from this, and a successful save re-syncs it (via the
+  // initialDays effect below, since a save revalidates the route) so every
+  // cell snaps back to full color. This *is* the save-state indicator; no
+  // separate banner/chip.
+  const [savedSlotsByDay, setSavedSlotsByDay] = useState(() => initialDays.map((day) => day.slots));
+  const [savedLabelsByDay, setSavedLabelsByDay] = useState(() => initialDays.map((day) => day.labels));
   const [isPending, startTransition] = useTransition();
-  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [openEvent, setOpenEvent] = useState<TherapistReservation | null>(null);
   // Reservations a paint attempt (click or drag) touched but couldn't
   // overwrite — surfaced after the paint gesture ends so the therapist can
@@ -190,20 +227,61 @@ export function ScheduleView({
   const [rescheduleMessage, setRescheduleMessage] = useState<string | null>(null);
   const [cancelMessage, setCancelMessage] = useState<string | null>(null);
 
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
   const [clipboardMonday, setClipboardMonday] = useState<string | null>(null);
   const [pasteWeekCount, setPasteWeekCount] = useState(1);
   const [isPasting, startPasteTransition] = useTransition();
   const [pasteMessage, setPasteMessage] = useState<string | null>(null);
 
-  // Painting: pick a tool (施術可能/不可/休憩) above the grid, then click or drag
+  // Painting: pick a tool (施術可能/その他/休憩) above the grid, then click or drag
   // over cells to set them to that tool's state — the tool never changes based on
   // what a cell already contains, so it's always clear what a drag will produce.
   const [selectedTool, setSelectedTool] = useState<SlotState>("available");
+  // The reason text applied to whatever gets painted while "その他" is
+  // selected — typed once in the toolbar, not re-prompted per gesture.
+  const [otherLabel, setOtherLabel] = useState("");
   const [isPainting, setIsPainting] = useState(false);
   // Which exact slot the cursor is over right now, so a merged multi-hour
   // band can highlight only that one slot instead of drawing every internal
   // boundary in the band at once.
   const [hoverSlot, setHoverSlot] = useState<{ dayIndex: number; slotIndex: number } | null>(null);
+  // A small badge that follows the cursor showing the hour it's over — the
+  // day columns get narrow enough that the left-edge time gutter alone isn't
+  // enough to tell which row you're on, especially in the rightmost columns.
+  const [timeBadge, setTimeBadge] = useState<{ x: number; y: number; time: string } | null>(null);
+  // Whether the first-time usage banner is showing. Starts false and is set
+  // from localStorage in an effect below (SSR has no localStorage, so this
+  // avoids a hydration mismatch) — undefined-in-storage means "never
+  // dismissed", so it defaults to shown.
+  const [showHelp, setShowHelp] = useState(false);
+
+  // True for exactly the one paint gesture right after a tool button click —
+  // that gesture always honors the clicked tool even if it overlaps the
+  // previous gesture's range, otherwise deliberately re-touching a cell you
+  // just painted (to give it a *different* state) would get misread as
+  // "revert this" and silently ignore the button you just pressed.
+  const explicitToolPendingRef = useRef(false);
+  // The most recent *finished* gesture's (day, row-range) — lets the next
+  // gesture tell "fix the overshoot" (dragging back into this range) apart
+  // from "extend with the same tool" (dragging into fresh cells), even though
+  // both look identical at the moment the drag starts. Only one gesture can
+  // be in flight at a time, so a single ref (not one per day) is enough —
+  // comparing its own `dayIndex` field is what keeps each day independent.
+  const lastEditRef = useRef<{ dayIndex: number; start: number; end: number } | null>(null);
+  // The gesture currently in progress, if any. `sampledValue` is whatever the
+  // start cell held *before* this gesture touched it, used only if the
+  // gesture turns out to be a correction; `isCorrection` flips true the
+  // moment the drag reaches into lastEditRef's range and stays true for the
+  // rest of the gesture, at which point every cell already touched this
+  // gesture is repainted with `sampledValue` instead of the selected tool.
+  const gestureRef = useRef<{
+    dayIndex: number;
+    sampledValue: { state: SlotState; label: string | null };
+    isCorrection: boolean;
+    honorButton: boolean;
+    touchedRows: Set<number>;
+  } | null>(null);
 
   useEffect(() => {
     // Re-syncs local edits to the server's data whenever it changes — after a
@@ -213,6 +291,13 @@ export function ScheduleView({
     // the grid would keep showing stale content until a manual reload.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDays(initialDays);
+    // Re-syncing here (not just in handleSave) covers every path that can
+    // change the server's truth — Paste/Copy and a therapist-side Cancel
+    // both revalidate this same route without a remount too, and their
+    // resulting slots should also read as "saved", not merely "matches
+    // whatever this tab last submitted".
+    setSavedSlotsByDay(initialDays.map((day) => day.slots));
+    setSavedLabelsByDay(initialDays.map((day) => day.labels));
   }, [initialDays]);
 
   useEffect(() => {
@@ -220,6 +305,7 @@ export function ScheduleView({
     // state can't mismatch between server and client markup at hydration time.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setClipboardMonday(window.localStorage.getItem(CLIPBOARD_KEY));
+    setShowHelp(!window.localStorage.getItem(HELP_DISMISSED_KEY));
   }, []);
 
   useEffect(() => {
@@ -233,19 +319,70 @@ export function ScheduleView({
   useEffect(() => {
     if (!isPainting) return;
     function stopPainting() {
+      const gesture = gestureRef.current;
+      if (gesture && gesture.touchedRows.size > 0) {
+        const rows = [...gesture.touchedRows];
+        lastEditRef.current = { dayIndex: gesture.dayIndex, start: Math.min(...rows), end: Math.max(...rows) };
+      }
+      gestureRef.current = null;
       setIsPainting(false);
     }
     window.addEventListener("mouseup", stopPainting);
     return () => window.removeEventListener("mouseup", stopPainting);
   }, [isPainting]);
 
-  function setSlot(dayIndex: number, slotIndex: number, state: SlotState) {
-    setSavedAt(null);
-    setDays((prev) =>
-      prev.map((day, di) =>
-        di !== dayIndex ? day : { ...day, slots: day.slots.map((s, si) => (si === slotIndex ? state : s)) }
-      )
-    );
+  // Paints one cell — the only thing that actually writes to `days`. Skips
+  // the update entirely when neither the state nor the label would change,
+  // so re-entering a cell already at the target value (e.g. the mouse
+  // lingering, or a correction repainting cells that already sampled
+  // correctly) is a no-op.
+  function paintCell(dayIndex: number, slotIndex: number, newState: SlotState, newLabel: string | null) {
+    setDays((prev) => {
+      const day = prev[dayIndex];
+      if (day.slots[slotIndex] === newState && (day.labels[slotIndex] ?? null) === newLabel) return prev;
+      return prev.map((d, di) =>
+        di !== dayIndex
+          ? d
+          : {
+              ...d,
+              slots: d.slots.map((s, si) => (si === slotIndex ? newState : s)),
+              labels: d.labels.map((l, si) => (si === slotIndex ? newLabel : l)),
+            }
+      );
+    });
+    setSaveMessage(null);
+  }
+
+  // Called for every slot a paint gesture touches (both the starting cell and
+  // every cell dragged over afterward). Implements the "fix vs extend"
+  // auto-detection: see the gestureRef/lastEditRef comments above for why.
+  function enterCell(dayIndex: number, slotIndex: number) {
+    const gesture = gestureRef.current;
+    if (!gesture) return;
+    gesture.touchedRows.add(slotIndex);
+
+    const lastEdit = lastEditRef.current;
+    if (
+      !gesture.honorButton &&
+      !gesture.isCorrection &&
+      lastEdit &&
+      lastEdit.dayIndex === dayIndex &&
+      slotIndex >= lastEdit.start &&
+      slotIndex <= lastEdit.end
+    ) {
+      // This drag has reached into the range the *previous* gesture just
+      // painted — that means it's a correction, not a fresh extension.
+      // Repaint everything touched so far in *this* gesture with the
+      // sampled (still-correct) value instead of the selected tool.
+      gesture.isCorrection = true;
+      gesture.touchedRows.forEach((row) => paintCell(dayIndex, row, gesture.sampledValue.state, gesture.sampledValue.label));
+      return;
+    }
+    if (gesture.isCorrection) {
+      paintCell(dayIndex, slotIndex, gesture.sampledValue.state, gesture.sampledValue.label);
+    } else {
+      paintCell(dayIndex, slotIndex, selectedTool, selectedTool === "unavailable" ? otherLabel.trim() || null : null);
+    }
   }
 
   function blockOnEvents(events: TherapistReservation[]): boolean {
@@ -267,24 +404,55 @@ export function ScheduleView({
     if (isLocked(dayIndex, slotIndex)) return;
     if (blockOnEvents(findEventsForSlot(days[dayIndex].events, slotIndex))) return;
     setIsPainting(true);
-    setSlot(dayIndex, slotIndex, selectedTool);
+    // A button click just before this gesture always wins, regardless of
+    // overlap with lastEdit — consumed here so only *this* gesture gets it.
+    const honorButton = explicitToolPendingRef.current;
+    explicitToolPendingRef.current = false;
+    const sampledState = days[dayIndex].slots[slotIndex] ?? "unavailable";
+    gestureRef.current = {
+      dayIndex,
+      sampledValue: {
+        state: sampledState,
+        label: sampledState === "unavailable" ? (days[dayIndex].labels[slotIndex] ?? null) : null,
+      },
+      isCorrection: false,
+      honorButton,
+      touchedRows: new Set(),
+    };
+    enterCell(dayIndex, slotIndex);
   }
 
   function handlePaintEnter(dayIndex: number, slotIndex: number) {
-    if (!isPainting || isLocked(dayIndex, slotIndex)) return;
+    if (!isPainting) return;
+    const gesture = gestureRef.current;
+    if (!gesture || dayIndex !== gesture.dayIndex) return; // ignore cross-column moves
+    if (isLocked(dayIndex, slotIndex)) return;
     if (blockOnEvents(findEventsForSlot(days[dayIndex].events, slotIndex))) return;
-    setSlot(dayIndex, slotIndex, selectedTool);
+    enterCell(dayIndex, slotIndex);
   }
 
   const hasEditableDay = days.some((day) => !day.isPast);
   const weekReservationCount = days.reduce((sum, day) => sum + day.events.length, 0);
+  const hasUnsavedChanges = days.some((day, dayIndex) =>
+    day.slots.some(
+      (s, slotIndex) =>
+        s !== (savedSlotsByDay[dayIndex]?.[slotIndex] ?? "unavailable") ||
+        (s === "unavailable" && (day.labels[slotIndex] ?? null) !== (savedLabelsByDay[dayIndex]?.[slotIndex] ?? null))
+    )
+  );
 
   function handleSave() {
     startTransition(async () => {
-      await saveWeekAvailability(
-        days.filter((day) => !day.isPast).map((day) => ({ dateIso: day.dateIso, slots: day.slots }))
+      const result = await saveWeekAvailability(
+        days.filter((day) => !day.isPast).map((day) => ({ dateIso: day.dateIso, slots: day.slots, labels: day.labels }))
       );
-      setSavedAt(Date.now());
+      if (result.status === "ok") {
+        setSaveMessage(null);
+      } else if (result.status === "conflict") {
+        setSaveMessage(`${formatMondayLabel(result.dateIso)}に予約が入っているマスが含まれているため保存できませんでした`);
+      } else {
+        setSaveMessage("保存できませんでした");
+      }
     });
   }
 
@@ -303,8 +471,14 @@ export function ScheduleView({
   function handlePaste() {
     if (!clipboardMonday) return;
     startPasteTransition(async () => {
-      await copyWeekAvailability(clipboardMonday, days[0].dateIso, pasteWeekCount);
-      setPasteMessage(pasteWeekCount > 1 ? `${pasteWeekCount}週分、貼り付けました` : "貼り付けました");
+      const result = await copyWeekAvailability(clipboardMonday, days[0].dateIso, pasteWeekCount);
+      if (result.status === "conflict") {
+        setPasteMessage(`${formatMondayLabel(result.dateIso)}に予約が入っているマスが含まれているため貼り付けできませんでした`);
+      } else if (result.status === "invalid_input") {
+        setPasteMessage("貼り付けできませんでした");
+      } else {
+        setPasteMessage(pasteWeekCount > 1 ? `${pasteWeekCount}週分、貼り付けました` : "貼り付けました");
+      }
     });
   }
 
@@ -329,6 +503,8 @@ export function ScheduleView({
         setRescheduleMessage(`${result.conflictingClientName}様がすでに予約されています`);
       } else if (result.status === "past") {
         setRescheduleMessage("過去の日時には変更できません");
+      } else if (result.status === "invalid_time") {
+        setRescheduleMessage("平日9:00〜20:00の、休憩・その他でない時間を指定してください");
       } else {
         setRescheduleMessage("変更できませんでした");
       }
@@ -340,6 +516,15 @@ export function ScheduleView({
     startTransition(() => {
       setBookingNotificationEnabled(!notification.enabled);
     });
+  }
+
+  function handleCloseHelp() {
+    setShowHelp(false);
+    window.localStorage.setItem(HELP_DISMISSED_KEY, "1");
+  }
+
+  function handleReopenHelp() {
+    setShowHelp(true);
   }
 
   const openEventDay = openEvent ? (days.find((d) => d.dateIso === openEvent.dateIso) ?? null) : null;
@@ -451,6 +636,34 @@ export function ScheduleView({
 
         <div className="grow flex gap-4.5 overflow-hidden">
           <div className="grow overflow-y-auto rounded-2xl border border-border bg-surface p-5 flex flex-col gap-3.5">
+            {showHelp && (
+              <div className="flex items-start gap-3 bg-role-therapist-soft border border-role-therapist rounded-xl px-4 py-3.5">
+                <span className="w-[22px] h-[22px] rounded-full bg-role-therapist text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                  ?
+                </span>
+                <div className="grow">
+                  <div className="text-[13px] font-bold">はじめての方へ — 使い方は3ステップです</div>
+                  <div className="flex flex-wrap gap-4.5 mt-2">
+                    {["上のボタンで状態を選ぶ", "マスをクリック／ドラッグで反映", "「この内容で保存する」を押す"].map((step, i) => (
+                      <div key={step} className="flex items-center gap-1.5 text-xs text-role-therapist">
+                        <span className="w-[18px] h-[18px] rounded-full bg-surface border-[1.5px] border-role-therapist flex items-center justify-center text-[10px] font-bold shrink-0">
+                          {i + 1}
+                        </span>
+                        {step}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCloseHelp}
+                  className="text-role-therapist text-xs px-1.5 py-0.5 shrink-0"
+                >
+                  閉じる ✕
+                </button>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Link
@@ -472,27 +685,68 @@ export function ScheduleView({
                     <path d="M9 6l6 6-6 6" />
                   </svg>
                 </Link>
+                {days[0]?.dateIso !== currentWeekMondayIso && (
+                  <Link
+                    href="/schedule"
+                    className="h-7 px-3 flex items-center justify-center rounded-lg border border-border text-ink-faint text-xs"
+                  >
+                    今週に戻る
+                  </Link>
+                )}
+                <input
+                  type="date"
+                  value={jumpDate}
+                  onChange={(e) => {
+                    setJumpDate(e.target.value);
+                    if (e.target.value) router.push(`/schedule?week=${e.target.value}`);
+                  }}
+                  aria-label="週を指定して移動"
+                  className="h-7 rounded-lg border border-border bg-surface px-2 text-[11px] mono text-ink-faint"
+                />
               </div>
               <div className="flex items-center gap-1.5">
                 {TOOL_OPTIONS.map((tool) => (
-                  <button
-                    key={tool.state}
-                    type="button"
-                    onClick={() => setSelectedTool(tool.state)}
-                    className={`flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] ${
-                      selectedTool === tool.state
-                        ? "bg-role-therapist-soft text-role-therapist font-medium ring-1 ring-role-therapist"
-                        : "text-ink-faint"
-                    }`}
-                  >
-                    <span className={`w-2.5 h-2.5 rounded-[3px] inline-block ${tool.swatchClass}`} />
-                    {tool.label}
-                  </button>
+                  <div key={tool.state} className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedTool(tool.state);
+                        explicitToolPendingRef.current = true;
+                      }}
+                      className={`flex items-center gap-1.5 h-8 px-3 rounded-lg text-[11px] ${
+                        selectedTool === tool.state
+                          ? "bg-role-therapist-soft text-role-therapist font-medium ring-1 ring-role-therapist"
+                          : "text-ink-faint"
+                      }`}
+                    >
+                      <span className={`w-2.5 h-2.5 rounded-[3px] inline-block ${tool.swatchClass}`} />
+                      {tool.label}
+                    </button>
+                    {tool.state === "unavailable" && selectedTool === "unavailable" && (
+                      <input
+                        type="text"
+                        value={otherLabel}
+                        onChange={(e) => setOtherLabel(e.target.value)}
+                        placeholder="理由を入力(任意)"
+                        maxLength={50}
+                        className="h-8 w-32 rounded-lg border border-border bg-surface px-2 text-[11px]"
+                      />
+                    )}
+                  </div>
                 ))}
                 <span className="flex items-center gap-1.5 h-8 px-3 text-[11px] text-ink-faint">
                   <span className="w-2.5 h-2.5 rounded-[3px] inline-block bg-role-therapist border-2 border-accent-strong" />
                   予約あり
                 </span>
+                {!showHelp && (
+                  <button
+                    type="button"
+                    onClick={handleReopenHelp}
+                    className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg border border-border text-ink-faint text-[11px]"
+                  >
+                    ? 使い方をもう一度見る
+                  </button>
+                )}
               </div>
             </div>
             {hasEditableDay ? (
@@ -507,7 +761,24 @@ export function ScheduleView({
 
             <div
               className="grid gap-1 select-none"
-              onMouseLeave={() => setHoverSlot(null)}
+              onMouseMove={(e) => {
+                // Computed from raw Y position (not per-cell handlers) so the
+                // badge shows over reservation chips and merged bands alike,
+                // and doesn't care about the gutter's 64px first column.
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top - ROW_HEIGHT_PX; // header row
+                if (x < 64 || y < 0) {
+                  setTimeBadge(null);
+                  return;
+                }
+                const slotIndex = Math.max(0, Math.min(SLOT_COUNT - 1, Math.floor(y / ROW_PITCH_PX)));
+                setTimeBadge({ x: e.clientX, y: e.clientY, time: slotStartTime(slotIndex) });
+              }}
+              onMouseLeave={() => {
+                setHoverSlot(null);
+                setTimeBadge(null);
+              }}
               style={{
                 gridTemplateColumns: `64px repeat(${days.length}, 1fr)`,
                 gridTemplateRows: `${ROW_HEIGHT_PX}px repeat(${SLOT_COUNT}, ${ROW_HEIGHT_PX}px)`,
@@ -561,7 +832,11 @@ export function ScheduleView({
               )}
 
               {days.map((day, dayIndex) =>
-                buildDayCells(day).map((cell) => {
+                buildDayCells(
+                  day,
+                  savedSlotsByDay[dayIndex] ?? day.slots,
+                  savedLabelsByDay[dayIndex] ?? day.labels
+                ).map((cell) => {
                   if (cell.kind === "slot") {
                     const rangeText = `${toShortTime(slotStartTime(cell.slotIndex))}–${toShortTime(slotStartTime(cell.slotIndex + cell.span))}`;
                     const disabled = day.isPast || cell.locked;
@@ -571,6 +846,11 @@ export function ScheduleView({
                     // which read as "the text shrank". Collapse to one compact
                     // line instead of shrinking the row further.
                     const compact = cell.span < SLOTS_PER_HOUR;
+                    // "その他" shows the therapist's own reason text when they
+                    // gave one, falling back to the generic state label
+                    // otherwise (including for older "不可" data saved before
+                    // this existed, which has no label at all).
+                    const displayLabel = cell.state === "unavailable" && cell.label ? cell.label : STATE_LABELS[cell.state];
                     const hovered =
                       hoverSlot?.dayIndex === dayIndex &&
                       hoverSlot.slotIndex >= cell.slotIndex &&
@@ -587,11 +867,14 @@ export function ScheduleView({
                           setHoverSlot({ dayIndex, slotIndex });
                         }}
                         onDragStart={(e) => e.preventDefault()}
+                        title={cell.state === "unavailable" && cell.label ? cell.label : undefined}
                         style={{ gridColumn: dayIndex + 2, gridRow: `${cell.slotIndex + 2} / span ${cell.span}` }}
                         className={`relative rounded-lg flex flex-col items-center justify-center overflow-hidden ${
                           compact ? "px-2 py-0" : "px-2.5 py-1.5"
                         } ${STATE_CLASSES[cell.state]} ${
-                          disabled ? "opacity-40 cursor-not-allowed" : "hover:ring-2 hover:ring-inset hover:ring-ink/25"
+                          disabled
+                            ? "opacity-40 cursor-not-allowed"
+                            : `cursor-pointer hover:ring-2 hover:ring-inset hover:ring-ink/25 ${cell.unsaved ? "opacity-[0.45]" : ""}`
                         }`}
                       >
                         {!disabled && hovered && cell.span > 1 && (
@@ -605,11 +888,11 @@ export function ScheduleView({
                         )}
                         {compact ? (
                           <span className="mono text-[10px] font-medium truncate w-full text-left">
-                            {STATE_LABELS[cell.state]} {rangeText}
+                            {displayLabel} {rangeText}
                           </span>
                         ) : (
                           <>
-                            <span className="text-xs font-medium truncate w-full text-center">{STATE_LABELS[cell.state]}</span>
+                            <span className="text-xs font-medium truncate w-full text-center">{displayLabel}</span>
                             <span className="mono text-[10px] opacity-80 truncate w-full text-center">{rangeText}</span>
                           </>
                         )}
@@ -630,12 +913,11 @@ export function ScheduleView({
                         <button
                           key={event.id}
                           type="button"
-                          disabled={day.isPast}
                           onMouseDown={() => setOpenEvent(event)}
                           onDragStart={(e) => e.preventDefault()}
                           title={`${event.clientName} ${toShortTime(event.startTime)}-${toShortTime(event.endTime)}`}
-                          className={`grow rounded-lg px-1.5 overflow-hidden flex items-center justify-center text-center text-[10px] font-medium truncate bg-role-therapist text-white border-2 border-accent-strong ${
-                            day.isPast ? "opacity-40 cursor-not-allowed" : "hover:border-white"
+                          className={`grow rounded-lg px-1.5 overflow-hidden flex items-center justify-center text-center text-[10px] font-medium truncate bg-role-therapist text-white border-2 border-accent-strong cursor-pointer hover:border-white ${
+                            day.isPast ? "opacity-70" : ""
                           }`}
                         >
                           {event.clientName}
@@ -646,6 +928,15 @@ export function ScheduleView({
                 })
               )}
             </div>
+
+            {timeBadge && (
+              <div
+                className="fixed bg-accent-strong text-white text-[11px] font-bold px-2 py-1 rounded-md pointer-events-none z-30 mono"
+                style={{ left: timeBadge.x + 16, top: timeBadge.y - 10 }}
+              >
+                {timeBadge.time}
+              </div>
+            )}
           </div>
 
           {/* Right sidebar */}
@@ -703,10 +994,10 @@ export function ScheduleView({
         </div>
 
         <div className="flex items-center justify-end gap-3">
-          {savedAt && <span className="text-xs text-role-therapist">保存しました</span>}
+          {saveMessage && <span className="text-xs text-destructive">{saveMessage}</span>}
           <button
             type="button"
-            disabled={isPending || !hasEditableDay}
+            disabled={isPending || !hasEditableDay || !hasUnsavedChanges}
             onClick={handleSave}
             className="self-end w-[220px] h-12 rounded-2xl bg-role-therapist text-white text-sm font-medium disabled:opacity-60"
           >
@@ -759,7 +1050,7 @@ export function ScheduleView({
                   <div className="flex items-center gap-2">
                     <input
                       type="date"
-                      min={new Date().toISOString().slice(0, 10)}
+                      min={localDateIso(new Date())}
                       value={newDate}
                       onChange={(e) => setNewDate(e.target.value)}
                       className="h-9 rounded-lg border border-border bg-surface px-2 text-sm mono grow"
@@ -811,7 +1102,7 @@ export function ScheduleView({
           <div className="w-full max-w-sm rounded-2xl bg-surface p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
             <div className="text-sm font-medium">この時間には利用者の予約があります</div>
             <p className="text-xs text-ink-faint leading-relaxed">
-              予約が入っている時間を、無断で「不可」「休憩」にすることはできません。先にキャンセルするか、日時を変更してください。
+              予約が入っている時間を、無断で「その他」「休憩」にすることはできません。先にキャンセルするか、日時を変更してください。
             </p>
             <div className="flex flex-col gap-1.5">
               {blockedEvents.map((event) => (

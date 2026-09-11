@@ -72,7 +72,10 @@ CREATE TABLE therapist_breaks (
   shift_id     TEXT NOT NULL REFERENCES therapist_shifts(id),
   break_start  TEXT NOT NULL,
   break_end    TEXT NOT NULL,
-  kind         TEXT NOT NULL CHECK (kind IN ('break', 'unavailable')) DEFAULT 'break'
+  kind         TEXT NOT NULL CHECK (kind IN ('break', 'unavailable')) DEFAULT 'break',
+  -- Free-text reason, only meaningful for kind='unavailable' ("その他" in the
+  -- UI — a plain "不可" gave no clue why, so the therapist can say why).
+  label        TEXT
 );
 
 CREATE TABLE rooms (

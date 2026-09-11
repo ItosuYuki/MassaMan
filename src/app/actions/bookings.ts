@@ -39,16 +39,10 @@ export async function rescheduleReservation(
   const therapistProfileId = findTherapistProfileIdByEmployeeCode(session.employeeId);
   if (!therapistProfileId) return { status: "not_found" };
 
-  const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  const nowTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  // Rejects a past date outright, and rejects today's date paired with a time
-  // that's already gone — the date-only check let a therapist "reschedule" a
-  // future booking to, say, 08:00 today at 4pm and have it silently accepted.
-  if (newDateIso < today || (newDateIso === today && newStartTime <= nowTime)) {
-    return { status: "past" };
-  }
-
+  // Date/time format, past-target, weekday, business-hours, and target-slot
+  // availability are all validated inside rescheduleReservationForTherapist
+  // itself — this action must stay safe even if called directly, so none of
+  // that lives only here.
   const result = rescheduleReservationForTherapist(reservationId, therapistProfileId, newDateIso, newStartTime);
   if (result.status === "ok") {
     revalidatePath("/schedule");

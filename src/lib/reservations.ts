@@ -1,5 +1,8 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { localDateIso, localTimeHHMM, parseIsoDateLocal, localWeekday, isValidDateIso } from "@/lib/local-date";
+import { getDayAvailability } from "@/lib/shifts";
+import { START_HOUR, END_HOUR, SLOT_COUNT, slotStartTime } from "@/lib/shift-slots";
 
 export type TherapistReservation = {
   id: string;
@@ -73,11 +76,10 @@ const CANCEL_FOR_THERAPIST = db.prepare(`
  * day" comparison the availability grid's own past-time lock uses.
  */
 function hasReservationStarted(dateIso: string, startTime: string, now: Date): boolean {
-  const todayIso = now.toISOString().slice(0, 10);
+  const todayIso = localDateIso(now);
   if (dateIso < todayIso) return true;
   if (dateIso > todayIso) return false;
-  const nowTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  return startTime <= nowTime;
+  return startTime <= localTimeHHMM(now);
 }
 
 export type CancelResult =
@@ -139,7 +141,32 @@ export type RescheduleResult =
   | { status: "ok" }
   | { status: "not_found" }
   | { status: "past" }
+  | { status: "invalid_time" }
   | { status: "conflict"; conflictingClientName: string };
+
+/**
+ * True only if every slot the reservation's new [startTime, endTime) touches
+ * is "available" on that day for this therapist — i.e. not a break, not
+ * marked unavailable, and not outside their working hours. Only defends
+ * against the *availability grid*; overlapping another reservation is
+ * checked separately (FIND_OVERLAPPING_FOR_THERAPIST/ROOM).
+ */
+function isRangeAvailable(therapistProfileId: string, dateIso: string, startTime: string, endTime: string): boolean {
+  const slots = getDayAvailability(therapistProfileId, dateIso);
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    const slotStart = slotStartTime(i);
+    const slotEnd = slotStartTime(i + 1);
+    if (slotStart < endTime && slotEnd > startTime && slots[i] !== "available") {
+      return false;
+    }
+  }
+  return true;
+}
+
+const BUSINESS_HOURS_START = `${String(START_HOUR).padStart(2, "0")}:00`;
+const BUSINESS_HOURS_END = `${String(END_HOUR).padStart(2, "0")}:00`;
+
+const TIME_HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** Moves a reservation to a new date/start time, keeping its original duration. */
 export function rescheduleReservationForTherapist(
@@ -149,6 +176,20 @@ export function rescheduleReservationForTherapist(
   newStartTime: string,
   now: Date = new Date()
 ): RescheduleResult {
+  // A Server Action must validate its own inputs regardless of what the UI's
+  // <input type="date">/<input type="time"> constrain — a direct call (or a
+  // modified/replayed request) can send anything.
+  if (!isValidDateIso(newDateIso) || !TIME_HHMM_RE.test(newStartTime)) {
+    return { status: "invalid_time" };
+  }
+  // The target date/time being in the past belongs here, not only in the
+  // calling Server Action — this function has to be safe to call on its own,
+  // not merely safe behind whatever check its one current caller happens to
+  // add first.
+  if (newDateIso < localDateIso(now) || (newDateIso === localDateIso(now) && newStartTime <= localTimeHHMM(now))) {
+    return { status: "past" };
+  }
+
   const current = db
     .prepare(
       `SELECT reservation_date, start_time, end_time, room_id FROM reservations
@@ -172,6 +213,18 @@ export function rescheduleReservationForTherapist(
   const endTotal = startTotal + durationMinutes;
   const newEndTime = `${String(Math.floor(endTotal / 60)).padStart(2, "0")}:${String(endTotal % 60).padStart(2, "0")}`;
 
+  // The UI only offers weekdays within business hours, but a Server Action
+  // has to assume nothing about how it was called — a Sunday, a 03:00 start,
+  // or a start that pushes the end past closing must all be rejected here,
+  // not just have their target slots checked below (a 19:30 start for a
+  // 45min visit ends at 20:15, outside the grid entirely).
+  const weekday = localWeekday(parseIsoDateLocal(newDateIso));
+  const isWeekday = weekday >= 1 && weekday <= 5;
+  const withinBusinessHours = newStartTime >= BUSINESS_HOURS_START && newEndTime <= BUSINESS_HOURS_END;
+  if (!isWeekday || !withinBusinessHours || !isRangeAvailable(therapistProfileId, newDateIso, newStartTime, newEndTime)) {
+    return { status: "invalid_time" };
+  }
+
   const therapistConflict = FIND_OVERLAPPING_FOR_THERAPIST.get(
     therapistProfileId,
     newDateIso,
@@ -192,6 +245,10 @@ export function rescheduleReservationForTherapist(
     if (roomConflict) return { status: "conflict", conflictingClientName: roomConflict.client_name };
   }
 
-  RESCHEDULE.run(newDateIso, newStartTime, newEndTime, reservationId, therapistProfileId);
+  // Between the SELECT above and here, another request could have cancelled
+  // this same reservation — without checking `changes`, that race would still
+  // report "ok" while the DB silently kept the old date/time.
+  const result = RESCHEDULE.run(newDateIso, newStartTime, newEndTime, reservationId, therapistProfileId);
+  if (result.changes === 0) return { status: "not_found" };
   return { status: "ok" };
 }
