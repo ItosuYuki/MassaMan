@@ -54,6 +54,14 @@ const TOOL_OPTIONS: { state: SlotState; label: string; swatchClass: string }[] =
 
 const CLIPBOARD_KEY = "massaman:schedule-clipboard-monday";
 const HELP_DISMISSED_KEY = "massaman:schedule-help-dismissed";
+// Mirrors the same constant in src/lib/booking/data.ts, which enforces it
+// server-side when accepting new reservations (nobody may book this
+// therapist/room for this long after a treatment ends). Duplicated here
+// rather than imported — that file is a "use server" booking action module,
+// a different bounded context from this client component — so the grid can
+// show *why* the slot right after a reservation isn't really free, instead
+// of silently rendering it as plain "施術可能".
+const CLEANUP_BUFFER_MINUTES = 15;
 // Half of the old 44px hour row: slots are now 30min, but same-state slots
 // still merge into one band (buildDayCells), so a full "available" morning
 // still renders at the same height it always did — only an actual break/
@@ -74,15 +82,31 @@ function formatMondayLabel(mondayIso: string): string {
   return `${Number(month)}/${Number(day)}`;
 }
 
-// A reservation occupies a slot if their time ranges overlap at all — a slot
-// [start, end) and a reservation [r.startTime, r.endTime) overlap when each
-// starts before the other ends. With hourly slots this can return more than
-// one reservation for a slot (the "up to 2 clients in one hour" overflow case
-// — see the project_overflow_booking_rule memory).
+/** Adds `minutes` to a "HH:MM" time string, e.g. addMinutesToTime("19:50", 15) -> "20:05". */
+function addMinutesToTime(time: string, minutes: number): string {
+  const [hour, minute] = time.split(":").map(Number);
+  const total = hour * 60 + minute + minutes;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+/** A reservation's end time plus its mandatory post-treatment cleanup buffer (see CLEANUP_BUFFER_MINUTES above). */
+function occupiedEndTime(event: TherapistReservation): string {
+  return addMinutesToTime(event.endTime, CLEANUP_BUFFER_MINUTES);
+}
+
+// A reservation occupies a slot if the slot overlaps [r.startTime,
+// occupiedEndTime(r)) — the cleanup buffer is folded straight into the same
+// occupied range as the treatment itself (not a separate cell/state), so the
+// grid never shows the 15 minutes right after a reservation as plain
+// "施術可能": it's still part of that same reservation's block, and the
+// buffer's own end time is surfaced in the reservation's own detail (see
+// openEvent) rather than a dedicated UI element. With hourly slots this can
+// return more than one reservation for a slot (the "up to 2 clients in one
+// hour" overflow case — see the project_overflow_booking_rule memory).
 function findEventsForSlot(events: TherapistReservation[], slotIndex: number): TherapistReservation[] {
   const slotStart = slotStartTime(slotIndex);
   const slotEnd = slotStartTime(slotIndex + 1);
-  return events.filter((event) => event.startTime < slotEnd && event.endTime > slotStart);
+  return events.filter((event) => event.startTime < slotEnd && occupiedEndTime(event) > slotStart);
 }
 
 type DayCell =
@@ -852,7 +876,7 @@ export function ScheduleView({
                           type="button"
                           onMouseDown={() => setOpenEvent(event)}
                           onDragStart={(e) => e.preventDefault()}
-                          title={`${event.clientName} ${toShortTime(event.startTime)}-${toShortTime(event.endTime)}`}
+                          title={`${event.clientName} ${toShortTime(event.startTime)}-${toShortTime(event.endTime)}(清掃込み${toShortTime(occupiedEndTime(event))}まで)`}
                           className={`grow rounded-lg px-1.5 overflow-hidden flex items-center justify-center text-center text-[10px] font-medium truncate bg-role-therapist text-white border-2 border-accent-strong cursor-pointer hover:border-white ${
                             day.isPast ? "opacity-70" : ""
                           }`}
@@ -922,6 +946,9 @@ export function ScheduleView({
                 <div className="text-xs text-ink-faint mt-0.5 flex items-center gap-1.5">
                   {openEvent.department && <span>{openEvent.department}</span>}
                   {openEvent.roomName && <span>{openEvent.department ? "・" : ""}{openEvent.roomName}</span>}
+                </div>
+                <div className="text-xs text-ink-faint mt-0.5">
+                  施術後の清掃{CLEANUP_BUFFER_MINUTES}分込みで{toShortTime(occupiedEndTime(openEvent))}まで対応不可
                 </div>
               </div>
               <button
